@@ -28,7 +28,7 @@ Compile using: `g77 -o < file name the compiled code> <fotran code file name>`
 + Note that the use of compiler optimization tags, e.g., `-O2`, resulted in binaries that did not execute correctly  
 + Matt did not had success using code compiled using the “gfortran” compiler. Instead, use the legacy “g77” compiler  
 
-## Run the comppiled code
+## Run the compiled code
 + example: `./mn`  
 + If you use the provided `mobcal.in` file, the resulting `temp.out` file should be <u>exactly</u> the same as the provided output file.  
 
