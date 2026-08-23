@@ -1,0 +1,31 @@
+#!/bin/sh
+# commit-msg -- normalize the AI-assistance attribution trailer.
+#
+# Convention: `Assisted-by: <name>`, hyphenated so git parses it as a real
+# trailer (`git log --format='%(trailers:key=Assisted-by)'`), and with no email
+# address. It replaces the `Co-Authored-By: <name> <noreply@...>` form that AI
+# coding tools emit by default.
+#
+# Why: Co-Authored-By names a co-author and carries an address that does not
+# receive mail. On a repository whose whole value is that its results are
+# citable, an attribution line should say what actually happened and should not
+# invent a contactable person. Assisted-by does that, and stays greppable.
+#
+# Why a hook rather than a line in the contributor docs: the old form is baked
+# into the tooling that writes many of these commits, so a convention recorded
+# only in prose drifts back the first time someone works from habit. The hook
+# rewrites rather than rejects, so that habit costs nobody a retry.
+#
+# Idempotent -- a message already in the correct form passes through unchanged.
+# A message with no such trailer is left completely alone.
+#
+# Requires `git config core.hooksPath .githooks`. core.hooksPath is per-clone
+# and cannot be committed, so a fresh clone must run it once. See CLAUDE.md.
+
+msg="$1"
+tmp="$msg.trailer-tmp"
+
+sed -e 's/^Co-Authored-By: \(.*\) <[^>]*>[[:space:]]*$/Assisted-by: \1/I' \
+    -e 's/^Co-Authored-By:[[:space:]]*\(.*\)$/Assisted-by: \1/I' \
+    -e 's/^Assisted[ -][Bb]y:[[:space:]]*/Assisted-by: /' \
+    "$msg" > "$tmp" && mv "$tmp" "$msg"
