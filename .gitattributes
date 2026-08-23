@@ -1,0 +1,39 @@
+# Line endings are normalized to LF, in the repository AND in the working tree
+# on every platform.
+#
+# Why this file exists: the regression gate (test/regression.sh) byte-compares
+# freshly generated program output against the reference outputs committed under
+# sample-output/, and CI runs that comparison on Linux, macOS and Windows. A
+# Windows clone with the default core.autocrlf=true checks those references out
+# with CRLF endings while the program writes LF, so the comparison fails on one
+# platform out of three for a reason that has nothing to do with the physics.
+#
+# `eol=lf` rather than just `text=auto` is deliberate: it pins the working tree,
+# not only the stored blob, so a byte compare means the same thing everywhere.
+# Any modern editor handles LF on Windows.
+#
+# This file is the first half of the fix. The second half is that
+# test/regression.sh normalizes line endings itself before comparing, instead of
+# trusting checkout behaviour. Either alone would be enough on a good day; the
+# gate is the foundation every later change is measured against, so it gets both.
+
+*           text=auto eol=lf
+
+# Spelled out for the files the gate depends on, so the intent survives an edit
+# to the wildcard above.
+*.f         text eol=lf
+*.out       text eol=lf
+*.mfj       text eol=lf
+*.in        text eol=lf
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.md        text eol=lf
+
+# Never transform these. text=auto guesses from content and guesses well, but a
+# reference PDF or an archive is not worth leaving to a heuristic.
+*.pdf       binary
+*.png       binary
+*.jpg       binary
+*.gz        binary
+*.zip       binary
