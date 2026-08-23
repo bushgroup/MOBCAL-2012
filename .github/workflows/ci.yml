@@ -43,26 +43,29 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         gas: [he, n2]
-        # The two gases are not remotely comparable in cost, and the difference
-        # is large enough that one shared timeout is either useless or wrong.
-        # Measured on a fast workstation, gfortran 16.2.0 -O3 -fno-automatic,
-        # the same 400,000 trajectories at the published seed:
+        # The two gases are not remotely comparable in cost, so one shared
+        # timeout would be either useless or wrong. Measured on these runners,
+        # same 400,000 trajectories at the published seed:
         #
-        #   he   4.7 minutes
-        #   n2   over 40 minutes, roughly an order of magnitude more
+        #   platform          he        n2        n2/he
+        #   ubuntu-latest     2m 48s    62m 41s    22.4x
+        #   macos-latest      1m 12s    29m 21s    24.5x
+        #   windows-latest    2m 53s    64m 51s    22.5x
         #
         # mobcal_N2.f evaluates a four-site potential with a quadrupole term
-        # where mobcal_He.f evaluates one centre, so this is expected rather
-        # than suspicious. A hosted runner is slower per core than that
-        # workstation, so n2 gets close to the six-hour ceiling GitHub imposes
-        # on a job. These numbers are a first estimate from one machine; the
-        # first green run of this workflow replaces them with real per-platform
-        # times, and the timeouts should be tightened then.
+        # where mobcal_He.f evaluates one centre, so a ~22x cost is expected
+        # rather than suspicious. Worth knowing before anyone reduces the matrix
+        # to save time: n2 is the expensive half by a factor of twenty, and it
+        # is also the half with a real element-table bug to catch.
+        #
+        # Timeouts are roughly 2x the slowest observed run -- enough headroom
+        # for a slow runner or a busy queue, tight enough that a hang fails in
+        # reasonable time rather than sitting near GitHub's six-hour ceiling.
         include:
           - gas: he
-            timeout: 90
+            timeout: 30
           - gas: n2
-            timeout: 350
+            timeout: 150
 
     steps:
       - uses: actions/checkout@v7
