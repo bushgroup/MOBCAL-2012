@@ -14,8 +14,8 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 ## Files
 
 ### Program, input, and reference output
-+ `mobcal_He.f` Fotran 77 source code
-+ `mobcal_N2.f` Fotran 77 source code
++ `mobcal_He.f` Fortran 77 source code
++ `mobcal_N2.f` Fortran 77 source code
 + `mobcal.in` Parameter file. Sets input file name, output file name, and random number seed
 + `Choline.mfj` Input file used for choline in [1]
 + `sample-output/Choline_He.out` Output file for choline in He gas, as published with [1]
