@@ -1,0 +1,109 @@
+name: regression
+
+# The gate described in test/regression.sh, run on the three platforms the code
+# is expected to build on. One job per (platform, gas) pair rather than one job
+# running both gases: each run is 400,000 trajectories and takes minutes, so
+# splitting halves the wall time and a red square names the failing combination
+# without anyone opening a log.
+#
+# fail-fast is off deliberately. When a platform diverges we need to see what
+# every OTHER platform did in the same run -- that is the evidence that decides
+# whether the divergence is a physics change or one platform's floating-point
+# summation order, and therefore whether test/strict-platforms should change.
+
+on:
+  push:
+    branches: [main, 'v*-dev']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ${{ matrix.gas }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        gas: [he, n2]
+        # The two gases are not remotely comparable in cost, and the difference
+        # is large enough that one shared timeout is either useless or wrong.
+        # Measured on a fast workstation, gfortran 16.2.0 -O3 -fno-automatic,
+        # the same 400,000 trajectories at the published seed:
+        #
+        #   he   4.7 minutes
+        #   n2   over 40 minutes, roughly an order of magnitude more
+        #
+        # mobcal_N2.f evaluates a four-site potential with a quadrupole term
+        # where mobcal_He.f evaluates one centre, so this is expected rather
+        # than suspicious. A hosted runner is slower per core than that
+        # workstation, so n2 gets close to the six-hour ceiling GitHub imposes
+        # on a job. These numbers are a first estimate from one machine; the
+        # first green run of this workflow replaces them with real per-platform
+        # times, and the timeouts should be tightened then.
+        include:
+          - gas: he
+            timeout: 90
+          - gas: n2
+            timeout: 350
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up gfortran
+        id: fortran
+        uses: fortran-lang/setup-fortran@v1
+        with:
+          compiler: gcc
+          version: 14
+
+      # .gitattributes claims to pin line endings to LF in the working tree on
+      # every platform. This tests that claim instead of trusting it. It is the
+      # cheapest step in the workflow and it guards the assumption the whole
+      # comparison rests on -- if a Windows checkout silently reintroduced CRLF
+      # we would rather find out here, in one line, than inside a 300-line diff.
+      - name: Check the working tree is LF
+        shell: bash
+        run: |
+          set -eu
+          bad=0
+          for f in mobcal_He.f mobcal_N2.f Choline.mfj mobcal.in \
+                   sample-output/Choline_He.out sample-output/Choline_N2.out \
+                   test/regression.sh; do
+            if LC_ALL=C grep -q "$(printf '\r')" "$f"; then
+              echo "CR found in $f"
+              bad=1
+            fi
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "The working tree is not LF. .gitattributes did not take effect."
+            exit 1
+          fi
+          echo "All checked files are LF."
+          echo "mobcal_He.f is $(wc -c < mobcal_He.f) bytes (expect 88015)."
+
+      - name: Run the regression gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/regression.sh --gas ${{ matrix.gas }} --keep
+
+      # Only reachable on failure, and it is exactly what a failure needs: the
+      # normalized reference, the normalized run, and the three diffs.
+      - name: Upload the diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-${{ matrix.os }}-${{ matrix.gas }}
+          path: |
+            test/_work/**/*.diff
+            test/_work/**/*.norm
+            test/_work/**/*.det
+            test/_work/**/run.log
+            test/_work/**/build.log
+          if-no-files-found: warn
+          retention-days: 14

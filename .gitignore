@@ -1,0 +1,13 @@
+# Scratch directory the regression gate builds and runs in.
+test/_work/
+
+# Compiler and run leftovers, wherever they land.
+*.exe
+*.o
+*.mod
+mobcal_he
+mobcal_n2
+
+# The program writes these to the current directory under fixed names.
+hold
+temp.out
