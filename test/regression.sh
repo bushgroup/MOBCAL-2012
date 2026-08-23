@@ -112,8 +112,18 @@ PLATFORM=$(platform_key)
 # trajectory integrator fails outright -- a measured 39,998 lost trajectories
 # and zero completed, against zero lost in every -fno-automatic build. The
 # failure is loud, but it is a failure, so the flag is not negotiable here.
+#
+# -std=legacy silences 64 "Fortran 2018 deleted feature" diagnostics per source
+# file -- all 128 of them in that one class, so nothing else is hiding in the
+# noise. It is codegen-neutral, and that is checkable rather than asserted: with
+# and without the flag, gfortran -S differs by exactly one word in 17,691 lines
+# of assembly for He and 20,056 for N2, and the word is not an instruction. It
+# is options[0] in the array handed to _gfortran_set_options -- the mask of
+# standards the runtime warns about -- while options[1], the mask of language
+# features the compiler accepts, is 16383 in both. T3 below is the empirical
+# confirmation.
 FC=${FC:-gfortran}
-FFLAGS=${FFLAGS:--O3 -fno-automatic}
+FFLAGS=${FFLAGS:--O3 -fno-automatic -std=legacy}
 
 # -static only on Windows: dynamic MSYS2 builds die silently when launched from
 # PowerShell. Apple's linker has no fully-static mode, so it must not be passed
@@ -212,13 +222,11 @@ for gas in $GASES; do
     printf '%s\n%s\n%s\n' "$staged" regression.out "$seed" > "$d/mobcal.in"
 
     echo "  building     : $FC $FFLAGS $LDFLAGS -o mobcal_$gas $src"
-    # Compiler diagnostics go to a file rather than the console. This source
-    # draws dozens of "Fortran 2018 deleted feature" warnings per build -- all
-    # genuine, all inherent to 1990s Fortran, none actionable here -- and left
-    # on stdout they bury the gate's own verdicts in a CI log. -std=legacy would
-    # silence them properly and is arguably the right flag for this code, but
-    # the build recipe is a separate decision and the gate must not change it as
-    # a side effect of tidying a log.
+    # Compiler diagnostics still go to a file rather than the console. With
+    # -std=legacy in FFLAGS there should be none at all, and the warning count
+    # printed below is the check on that: anything nonzero is a diagnostic
+    # outside the deleted-feature class and worth reading, which is exactly the
+    # signal the old 64-warnings-per-build noise floor destroyed.
     # shellcheck disable=SC2086
     if ! ( cd "$ROOT" && "$FC" $FFLAGS $LDFLAGS -o "$d/mobcal_$gas" "$src" ) \
             > "$d/build.log" 2>&1; then

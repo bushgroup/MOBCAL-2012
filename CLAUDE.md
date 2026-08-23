@@ -98,6 +98,12 @@ references published in 2012, which were produced with g77.
 
 ## Building
 
+The recipe is `-O3 -fno-automatic -std=legacy`, plus `-static` on Windows. It
+lives in exactly one place — `FFLAGS` in `test/regression.sh` — because the CI
+workflow does not set `FFLAGS` and therefore cannot drift from it. `README.md`
+documents the same flags for users; that copy is prose and has to be updated by
+hand, so change both.
+
 `-fno-automatic` is **mandatory**, not an optimization preference. The code
 relies on static storage for locals, which was g77's default. Without the flag
 an optimizing gfortran build gives locals automatic storage and the trajectory
@@ -109,6 +115,26 @@ silently shifts a published number.
 `-static` is passed on Windows only. Dynamically linked MSYS2 builds die
 silently when launched from PowerShell, Apple's linker has no fully-static mode,
 and it buys nothing on a Linux runner.
+
+`-std=legacy` was adopted in v1.1 after being deliberately left open in chunk 0.
+It silences 64 diagnostics per source file, and all 128 are in the *Fortran 2018
+deleted feature* class — 52 non-`CONTINUE` `DO` terminations, 6 shared `DO`
+labels, 3 arithmetic `IF`s, 3 non-integer `DO` bounds — so nothing else was
+hiding in that noise.
+
+It is codegen-neutral, and the proof is static rather than statistical. With and
+without the flag, `gfortran -S` output differs by one word in 17,691 lines of
+assembly for `mobcal_He.f` and 20,056 for `mobcal_N2.f`, and the word is not an
+instruction: `options[0]` in the array passed to `_gfortran_set_options` goes
+from 10308 to 0. That is the mask of standards the *runtime* warns about.
+`options[1]`, the mask of language features the compiler *accepts*, is 16383 in
+both. T3 is the empirical confirmation.
+
+The practical consequence for the gate: the warning count it prints used to be a
+constant 64 that everyone learned to ignore, and is now expected to be zero. A
+nonzero count means a diagnostic outside the deleted-feature class, which is
+worth reading. That is the actual argument for the flag — not tidiness, but that
+a build printing 64 warnings has no room left to report the 65th.
 
 On MSYS2, `C:\msys64\mingw64\bin` must be on `PATH`. Without it `gfortran`
 invocations fail with exit 1 and no output at all, which reads like a source
