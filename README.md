@@ -12,12 +12,28 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 3. Kim, H; Kim, H. I.; Johnson, P. V.; Beegle, L. W.; Beauchamp J.L.; Goddard, W.A.; Kanik, I. “Experimental and theoretical investigation into the correlation between mass and ion mobility for choline and other ammonium cations in N2.” <i>Anal. Chem.</i> <b>2008</b>, <i>80</i>, 1928-1936.
 
 ## Files
+
+### Program, input, and reference output
 + `mobcal_He.f` Fotran 77 source code
 + `mobcal_N2.f` Fotran 77 source code
 + `mobcal.in` Parameter file. Sets input file name, output file name, and random number seed
 + `Choline.mfj` Input file used for choline in [1]
-+ `Choline.He.out` Output file for choline in He gas
-+ `Choline.N2.out` Output file for choline in N2 gas
++ `sample-output/Choline_He.out` Output file for choline in He gas, as published with [1]
++ `sample-output/Choline_N2.out` Output file for choline in N2 gas, as published with [1]
+
+The two files under `sample-output/` are also the fixtures the regression gate
+compares against, so they are reference data and not just examples.
+
+### Repository
++ `LICENSE` GNU General Public License, version 3
++ `CLAUDE.md` Contributor notes: the regression gate, line endings, and build flags
++ `test/regression.sh` Regression gate. Builds both sources, runs `Choline.mfj` at the seed recorded in the reference outputs, and compares the result against `sample-output/`
++ `test/stochastic-lines.txt` Output lines excluded from the exact comparison because they depend on the pseudo-random number stream
++ `test/strict-platforms` Platforms on which whole-file byte identity is a gating check rather than a reported one
++ `.github/workflows/ci.yml` Runs `test/regression.sh` on Linux, macOS, and Windows, one job per platform and gas
++ `.githooks/commit-msg` Normalizes the AI-assistance attribution trailer. Enable it once per clone with `git config core.hooksPath .githooks`
++ `.gitattributes` Pins line endings to LF, in the repository and in the working tree, so the byte comparison means the same thing on every platform
++ `.gitignore` Build products and the scratch directory the regression gate runs in
 
 ## Environment
 All results in [1] were calculated by Iain Campuzano in a Linux environment. Matt Bush has used this code successfully in a Cygwin (http://www.cygwin.com/) environment (with “Devel” options and a text editor) on a Windows PC.
