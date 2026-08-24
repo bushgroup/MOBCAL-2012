@@ -32,6 +32,21 @@ unit in text mode. No checkout setting can normalize a difference introduced
 after checkout, so `test/regression.sh` strips end-of-line CR itself and does not
 rely on git having done it.
 
+## The two gates
+
+```sh
+sh test/regression.sh              # both gases -- minutes for he, ~1 h for n2
+sh test/bounds.sh                  # both gases -- seconds
+```
+
+`test/regression.sh` is the physics gate: one valid input, compared against
+committed reference outputs. `test/bounds.sh` is the safety gate: three inputs
+whose expected result is a refusal, so there is nothing to compare against and
+nothing that runs long. They are separate scripts because those are different
+shapes, and they share one build recipe — `test/build-flags.sh`, described under
+*Building* below. CI runs `bounds.sh` first, since a broken build should not cost
+an hour of n2 to discover.
+
 ## The regression gate
 
 ```sh
@@ -41,8 +56,9 @@ sh test/regression.sh --keep       # keep test/_work to inspect the diffs
 ```
 
 It builds both sources, runs `Choline.mfj` at the seed recorded in the reference
-outputs, and reports three tiers. `.github/workflows/ci.yml` runs the same
-script on ubuntu, macos and windows, one job per (platform, gas) pair.
+outputs, and reports three tiers. `.github/workflows/ci.yml` runs this script
+and `test/bounds.sh` on ubuntu, macos and windows, one job per (platform, gas)
+pair.
 
 | Tier | What it compares | Gating |
 |---|---|---|
@@ -73,6 +89,88 @@ will move the last printed digit — removing it means editing that file with a
 written reason. A gate that gets quietly weakened is worse than no gate, because
 everything measured afterwards inherits its reassurance.
 
+## The array-bound gate
+
+```sh
+sh test/bounds.sh                  # both gases
+sh test/bounds.sh --gas he         # one gas
+sh test/bounds.sh --keep           # keep test/_bounds to read the outputs
+```
+
+Three cases per gas, all generated rather than committed — the two over-bound
+fixtures are ~120 KB of repetitive filler between them, and the generator is the
+more useful artifact.
+
+| Case | Asserts |
+|---|---|
+| **over-atoms** `inatom` = `len`+1 | nonzero exit; the message names both numbers, in the output file *and* on the console; no cross section anywhere |
+| **over-coords** `icoord` = `lcoord`+1 | the same, plus that it refused before even reading the atom count |
+| **boundary** exactly `lcoord` and `len` | both counts accepted; no `ERROR`; execution reaches the pre-existing charge-distribution refusal |
+
+Three things about this that are easy to get wrong:
+
+**The boundary case is the only one that can see an off-by-one.** Neither
+over-bound input can distinguish `.gt.` from `.ge.`, and an off-by-one is the
+likeliest defect in a bound check. Verified by mutation: changing
+`if(inatom.gt.len)` to `.ge.` fails three of the boundary case's five assertions
+and nothing else in the suite. Verified in the other direction too — a message
+naming the count but not the limit fails two over-atoms assertions.
+
+**The boundary case cannot be a real run, and does not pretend to be.** A valid
+1,000-atom input is a trajectory calculation some fifty times the cost of
+choline's hour, and `itn`/`inp`/`imp` are hardcoded in the source, so there is no
+cheap configuration of it. So the boundary input declares both counts at the
+limit and then names a charge mode that does not exist. Passing both guards and
+landing on `charge distribution not specified` is the evidence that neither guard
+fired one early. It tests the guards and explicitly nothing past them.
+
+**The boundary case asserts exit status 0, and that is not a typo.** A bare
+Fortran `stop` exits 0, and every refusal this code shipped with is a bare stop —
+eight in `mobcal_He.f`, including `units not specified`, `charge distribution not
+specified` and `type not defined for atom number`. All eight report success to
+their caller. The two bound refusals added in v1.1 use `call exit(1)` instead,
+because a refusal a script cannot detect is not much of a refusal. The eight
+older ones were deliberately left alone, so the repository currently has refusals
+of both kinds; making them consistent is a change worth making on its own terms,
+not as a side effect of this one.
+
+## The two array bounds
+
+`mobcal_limits.inc` holds both, and holds them once:
+
+```
+parameter (len=1000)      ! atoms per conformer
+parameter (lcoord=100)    ! coordinate sets per input file
+```
+
+Before v1.1, `parameter (len=1000)` was written out fifteen times per source
+file. Two of those thirty lines carried a trailing space, so an exact-match
+replace-all silently skipped them — which is the fifteen-edit-points problem
+demonstrating itself.
+
+Four things to know before editing it:
+
+**`len` shadows the intrinsic `LEN`.** Pre-existing, accepted under
+`-std=legacy`, and not worth renaming: the name appears in every dimension
+expression in both files.
+
+**Both names must begin with `i`, `j`, `k` or `l`.** Every unit that includes the
+file declares `implicit double precision (a-h,m-z)`, so a name beginning `m`–`z`
+would be typed REAL and become a non-integer array bound. This is why the
+conformer limit is `lcoord` and not `maxcrd`.
+
+**In the main program the include must precede the `dimension` statement.**
+`tmc`/`tmm`/`ehsc`/`ehsm`/`pac`/`pam`/`asympp` are dimensioned `lcoord`, so the
+declaration block is reordered there rather than substituted in place. Everywhere
+else the `parameter` line already came before its uses.
+
+**The include does not change the build command.** `gfortran` resolves an
+`include` relative to the directory of the *source* file, not the working
+directory. Verified rather than assumed, on Windows: building from the repository
+root and building the same source by absolute path from an unrelated working
+directory produce byte-identical binaries. `README.md`'s "one command per gas"
+still holds; what changed is that it now lists a required source file.
+
 ## Two normalizations the comparison applies
 
 Both are narrow and both are needed to compare a gfortran build against the
@@ -99,10 +197,15 @@ references published in 2012, which were produced with g77.
 ## Building
 
 The recipe is `-O3 -fno-automatic -std=legacy`, plus `-static` on Windows. It
-lives in exactly one place — `FFLAGS` in `test/regression.sh` — because the CI
-workflow does not set `FFLAGS` and therefore cannot drift from it. `README.md`
-documents the same flags for users; that copy is prose and has to be updated by
-hand, so change both.
+lives in exactly one place — `FFLAGS` in `test/build-flags.sh`, which both gates
+source — because the CI workflow does not set `FFLAGS` and therefore cannot drift
+from it. `README.md` documents the same flags for users; that copy is prose and
+has to be updated by hand, so change both.
+
+Chunk 1 put the recipe in `test/regression.sh`. It moved to its own file in chunk
+2, when `test/bounds.sh` needed the same build: two copies of a build recipe is
+how a recipe drifts, and the single-definition property is the point, not the
+filename.
 
 `-fno-automatic` is **mandatory**, not an optimization preference. The code
 relies on static storage for locals, which was g77's default. Without the flag

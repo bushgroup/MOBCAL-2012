@@ -1,5 +1,8 @@
-# Scratch directory the regression gate builds and runs in.
+# Scratch directories the two gates build and run in. test/_bounds also holds
+# the generated over-bound inputs, which are fixtures the gate writes rather
+# than files anybody edits.
 test/_work/
+test/_bounds/
 
 # Compiler and run leftovers, wherever they land.
 *.exe

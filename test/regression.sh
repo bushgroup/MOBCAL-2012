@@ -96,42 +96,9 @@ done
 
 CR=$(printf '\r')
 
-platform_key() {
-    case "$(uname -s)" in
-        Linux*)               echo linux ;;
-        Darwin*)              echo macos ;;
-        MINGW*|MSYS*|CYGWIN*) echo windows ;;
-        *)                    echo "unknown" ;;
-    esac
-}
-PLATFORM=$(platform_key)
-
-# -fno-automatic is MANDATORY, not an optimization choice. The code relies on
-# static storage for locals, which was g77's default. Without this flag an
-# optimizing gfortran build gives every local automatic storage and the
-# trajectory integrator fails outright -- a measured 39,998 lost trajectories
-# and zero completed, against zero lost in every -fno-automatic build. The
-# failure is loud, but it is a failure, so the flag is not negotiable here.
-#
-# -std=legacy silences 64 "Fortran 2018 deleted feature" diagnostics per source
-# file -- all 128 of them in that one class, so nothing else is hiding in the
-# noise. It is codegen-neutral, and that is checkable rather than asserted: with
-# and without the flag, gfortran -S differs by exactly one word in 17,691 lines
-# of assembly for He and 20,056 for N2, and the word is not an instruction. It
-# is options[0] in the array handed to _gfortran_set_options -- the mask of
-# standards the runtime warns about -- while options[1], the mask of language
-# features the compiler accepts, is 16383 in both. T3 below is the empirical
-# confirmation.
-FC=${FC:-gfortran}
-FFLAGS=${FFLAGS:--O3 -fno-automatic -std=legacy}
-
-# -static only on Windows: dynamic MSYS2 builds die silently when launched from
-# PowerShell. Apple's linker has no fully-static mode, so it must not be passed
-# on macOS, and it buys nothing on a Linux CI runner.
-case "$PLATFORM" in
-    windows) LDFLAGS=${LDFLAGS:--static} ;;
-    *)       LDFLAGS=${LDFLAGS:-} ;;
-esac
+# The build recipe -- PLATFORM, FC, FFLAGS, LDFLAGS -- lives in one file, shared
+# with test/bounds.sh. Do not restate the flags here.
+. "$ROOT/test/build-flags.sh"
 
 # --- helpers ---------------------------------------------------------------
 
@@ -160,12 +127,7 @@ strict_here() {
 
 # --- setup -----------------------------------------------------------------
 
-command -v "$FC" >/dev/null 2>&1 || {
-    echo "regression.sh: compiler '$FC' not found on PATH" >&2
-    echo "  On MSYS2, C:\\msys64\\mingw64\\bin must be on PATH or the" >&2
-    echo "  compiler is not merely absent -- invocations fail with no output." >&2
-    exit 2
-}
+require_compiler
 
 rm -rf "$WORK"
 mkdir -p "$WORK"

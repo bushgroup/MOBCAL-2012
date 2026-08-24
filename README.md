@@ -16,6 +16,7 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 ### Program, input, and reference output
 + `mobcal_He.f` Fortran 77 source code
 + `mobcal_N2.f` Fortran 77 source code
++ `mobcal_limits.inc` The compiled-in array bounds, included by both sources. **Required to compile**, and the one file to edit if you need larger limits
 + `mobcal.in` Parameter file. Sets input file name, output file name, and random number seed
 + `Choline.mfj` Input file used for choline in [1]
 + `sample-output/Choline_He.out` Output file for choline in He gas, as published with [1]
@@ -26,14 +27,16 @@ compares against, so they are reference data and not just examples.
 
 ### Repository
 + `LICENSE` GNU General Public License, version 3
-+ `CLAUDE.md` Contributor notes: the regression gate, line endings, and build flags
++ `CLAUDE.md` Contributor notes: the two gates, line endings, and build flags
 + `test/regression.sh` Regression gate. Builds both sources, runs `Choline.mfj` at the seed recorded in the reference outputs, and compares the result against `sample-output/`
++ `test/bounds.sh` Array-bound gate. Checks that an input exceeding either compiled-in limit is refused with a message naming the limit and the actual count, and exits nonzero
++ `test/build-flags.sh` The build recipe, in the one place it is written down. Sourced by both gates
 + `test/stochastic-lines.txt` Output lines excluded from the exact comparison because they depend on the pseudo-random number stream
 + `test/strict-platforms` Platforms on which whole-file byte identity is a gating check rather than a reported one
-+ `.github/workflows/ci.yml` Runs `test/regression.sh` on Linux, macOS, and Windows, one job per platform and gas
++ `.github/workflows/ci.yml` Runs both gates on Linux, macOS, and Windows, one job per platform and gas
 + `.githooks/commit-msg` Normalizes the AI-assistance attribution trailer. Enable it once per clone with `git config core.hooksPath .githooks`
 + `.gitattributes` Pins line endings to LF, in the repository and in the working tree, so the byte comparison means the same thing on every platform
-+ `.gitignore` Build products and the scratch directory the regression gate runs in
++ `.gitignore` Build products and the scratch directories the two gates run in
 
 ## Environment
 All results in [1] were calculated by Iain Campuzano in a Linux environment. The code
@@ -42,8 +45,8 @@ is now built and tested on Linux, macOS and Windows on every change; see
 
 ## Compiling source code
 
-There are no dependencies, no configure step and no build system. One command per
-gas:
+There are no external dependencies, no configure step and no build system. One
+command per gas, run from the top of the repository:
 
 ```sh
 gfortran -O3 -fno-automatic -std=legacy -o mHe mobcal_He.f
@@ -59,10 +62,17 @@ gfortran -O3 -fno-automatic -std=legacy -static -o mHe.exe mobcal_He.f
 `gfortran` is part of GCC: available from every Linux package manager, from
 Homebrew on macOS, and from MSYS2 on Windows.
 
+Each source `include`s `mobcal_limits.inc`, so that file has to be present
+alongside it — but it does not change the command. `gfortran` resolves an
+`include` relative to the directory of the source file, so building either
+source by absolute path from an unrelated working directory produces a
+byte-identical binary. The build is still one compiler invocation with nothing
+to install.
+
 **These are the flags the continuous-integration matrix uses** — three platforms,
 both gases, compared against the reference outputs published with [1].
-`test/regression.sh` holds the authoritative copy; if you change the flags in one
-place, change them in the other.
+`test/build-flags.sh` holds the authoritative copy, and both gates source it; if
+you change the flags in one place, change them in the other.
 
 Earlier versions of this file recommended `g77` and advised against optimization
 flags. `g77` has not shipped in about fifteen years and is not packaged for
@@ -211,6 +221,16 @@ That builds, runs and compares against the references in `sample-output/`.
 `CLAUDE.md` explains the three tiers it reports and the two normalizations the
 comparison applies.
 
+A second, much faster gate checks that an input too large for the compiled
+array bounds is refused rather than silently miscalculated:
+
+```sh
+sh test/bounds.sh --gas he
+```
+
+It finishes in seconds, because every case it runs is designed to terminate
+before a single trajectory is integrated. See *Size limits* below.
+
 ### Tested compilers
 
 | platform | compiler |
@@ -231,3 +251,37 @@ provenance for the reference files, not as a requirement.
 ## Limitations
 + This method has been validated for drug-like small molecular ions in low pressure, ambient temperature He and N2 mobility experiment [1].  
 + This method has not been validated for other ions classes or experiments performed at high pressures or non-ambient temperatures.
+
+### Size limits
+
+| | limit |
+|---|---|
+| atoms per conformer | 1,000 |
+| coordinate sets (conformers) per input file | 100 |
+
+An input exceeding either limit is refused, with a message naming the limit and
+the count you gave, and the program exits with a nonzero status. It does not
+attempt a partial calculation.
+
+**Validated to 1,000 atoms — above that you are the first.** Both limits are set
+by one line each in `mobcal_limits.inc`, so raising one is a single edit and a
+rebuild. But nothing has been run through this code above 1,000 atoms, and
+neither the published results nor the reference outputs come anywhere close, so
+a larger limit is an untested regime rather than a tested one. That is why the
+default is not simply raised for everybody.
+
+The refusal exists because the alternative is worse than a crash. The per-atom
+arrays live in Fortran `COMMON` blocks, which storage association makes
+contiguous, and the build requires `-fno-automatic`, which puts them in static
+storage. One atom past the limit therefore writes atom 1,001's *x* coordinate
+onto atom 1's *y* coordinate — the same molecule, deterministically rewritten
+mid-calculation. Measured on the unguarded code, a 1,001-atom input made
+`mobcal_He.f` print
+
+```
+ average PA  cross section = 4.3469E+02
+ average EHS cross section = 2.6526E+02
+```
+
+formatted exactly as a real result, and exit with a success status. `test/bounds.sh`
+is the check that keeps that from being possible.

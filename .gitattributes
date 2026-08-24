@@ -22,6 +22,7 @@
 # Spelled out for the files the gate depends on, so the intent survives an edit
 # to the wildcard above.
 *.f         text eol=lf
+*.inc       text eol=lf
 *.out       text eol=lf
 *.mfj       text eol=lf
 *.in        text eol=lf

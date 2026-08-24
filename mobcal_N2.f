@@ -82,10 +82,10 @@ c     ***************************************************************
 c
 c
       implicit double precision (a-h,m-z)
-      dimension tmc(100),tmm(100),ehsc(100),ehsm(100),
-     ?pac(100),pam(100),asympp(100)
+      include 'mobcal_limits.inc'
+      dimension tmc(lcoord),tmm(lcoord),ehsc(lcoord),ehsm(lcoord),
+     ?pac(lcoord),pam(lcoord),asympp(lcoord)
       character*30 filen1,filen2,unit,dchar,xlabel
-      parameter (len=1000)
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -481,7 +481,7 @@ c     Reads in coordinates and other parameters.
 c
       implicit double precision (a-h,m-z)
       character*30 filen1,unit,dchar,xlabel
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       dimension imass(len),xmass(len) 
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
@@ -505,10 +505,49 @@ c
       read(9,*) icoord
       write(8,650) icoord
   650 format(1x,'number of coordinate sets =',i5)
+c
+c     Bound check, and not a nicety. icoord and inatom are read straight from
+c     the input and index arrays dimensioned lcoord and len in
+c     mobcal_limits.inc; that file explains at length why an unguarded overflow
+c     here is worse than a crash. Refuse, naming the limit and the actual
+c     count, and do it before any array is written.
+c
+c     call exit(1) rather than the bare `stop' the older refusals in this
+c     routine use. A bare stop exits 0, so a caller testing the status of a
+c     refused run cannot tell it from a successful one, which is the whole
+c     point here. The existing bare stops are deliberately left alone.
+c
+      if(icoord.gt.lcoord) then
+      write(8,651) icoord,lcoord
+  651 format(1x,'ERROR: input declares',i9,' coordinate sets;',
+     ?' this build holds',i9)
+      write(8,652)
+  652 format(1x,'refusing rather than corrupting memory. To raise the',
+     ?' limit, edit lcoord in mobcal_limits.inc and rebuild.')
+      write(6,651) icoord,lcoord
+      write(6,652)
+      close (8)
+      call exit(1)
+      endif
 c 
       read(9,*) inatom
       write(8,612) inatom
   612 format(1x,'number of atoms =',i4)
+c
+c     The atom bound, as above. This is the one that reaches the COMMON blocks.
+c
+      if(inatom.gt.len) then
+      write(8,616) inatom,len
+  616 format(1x,'ERROR: input declares',i9,' atoms; this build holds',
+     ?i9)
+      write(8,617)
+  617 format(1x,'refusing rather than corrupting memory. To raise the',
+     ?' limit, edit len in mobcal_limits.inc and rebuild.')
+      write(6,616) inatom,len
+      write(6,617)
+      close (8)
+      call exit(1)
+      endif
       read(9,'(a30)') unit
       read(9,'(a30)') dchar
 c
@@ -796,7 +835,7 @@ c
 c     Rotates the cluster/molecule to a random orientation.  
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -828,7 +867,7 @@ c
 c     Rotates the cluster/molecule.  
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -893,7 +932,7 @@ c
 c     Subroutine to calculate L-J + ion-dipole potential.
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1097,7 +1136,7 @@ c     distance from the center of mass
 c
       implicit double precision (a-h,m-z)
       dimension pot(3000),sdx(200),sdy(200),sdz(200)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1229,7 +1268,7 @@ c
 c     Runs a small set of trajectories at a collision energy of kT.
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1335,7 +1374,7 @@ c
 c     Runs one trajectory
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1384,7 +1423,7 @@ c
       implicit double precision (a-h,m-z)
       integer ns,nw,l
       dimension w(6),dw(6)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1579,7 +1618,7 @@ c
       implicit double precision (a-h,m-z)
       dimension w(6),dw(6),a(4),b(4),c(4),ampc(5),amcc(4),array(6,40),
      ?savw(40),savdw(40),q(40)
-      parameter (len=1000) 
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1665,7 +1704,7 @@ c     of the coordinates and momenta.
 c
       implicit double precision (a-h,m-z)
       dimension w(6),dw(6)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1716,7 +1755,7 @@ c
       dimension pgst(100),wgst(100),b2max(100)
       dimension q1st(100),q2st(100),cosx(0:500)
       dimension om11st(100),om12st(100),om13st(100),om22st(100)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -2100,7 +2139,7 @@ c     from code written by Alexandre Shvartsburg.
 c
       implicit double precision (a-h,m-z)
       dimension cof(-1:100),crof(100)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -2235,7 +2274,7 @@ c     Guides hard sphere scattering trajectory. Adapted from code
 c     written by Alexandre Shvartsburg.
 c 
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -2710,7 +2749,7 @@ c     Reads in a new set of coordinates
 c
       implicit double precision (a-h,m-z)
       character*30 unit,dchar,dummy
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       dimension imass(len),xmass(len) 
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,

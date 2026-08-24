@@ -87,9 +87,10 @@ jobs:
         run: |
           set -eu
           bad=0
-          for f in mobcal_He.f mobcal_N2.f Choline.mfj mobcal.in \
+          for f in mobcal_He.f mobcal_N2.f mobcal_limits.inc \
+                   Choline.mfj mobcal.in \
                    sample-output/Choline_He.out sample-output/Choline_N2.out \
-                   test/regression.sh; do
+                   test/regression.sh test/bounds.sh test/build-flags.sh; do
             if LC_ALL=C grep -q "$(printf '\r')" "$f"; then
               echo "CR found in $f"
               bad=1
@@ -100,7 +101,28 @@ jobs:
             exit 1
           fi
           echo "All checked files are LF."
-          echo "mobcal_He.f is $(wc -c < mobcal_He.f) bytes (expect 88015)."
+          # Informational, and deliberately not compared against a hardcoded
+          # number: the sources change, and a stale expectation is worse than
+          # none. The grep above is the actual check. This is here because the
+          # failure mode it guards against is size inflation -- a CRLF checkout
+          # of mobcal_He.f measured 90,793 bytes against an 88,015-byte blob --
+          # so the number next to git's own idea of the blob size is the useful
+          # thing to see in a log.
+          for f in mobcal_He.f mobcal_N2.f; do
+            echo "$f: $(wc -c < "$f") bytes on disk, \
+$(git cat-file -s "$(git rev-parse "HEAD:$f")") bytes in the blob"
+          done
+
+      # Before the regression gate, not after. This one finishes in seconds
+      # because every case is designed to terminate before any trajectory is
+      # integrated, and the regression gate that follows it takes up to an hour
+      # on the n2 jobs. A build error or a broken guard should not cost an hour
+      # to discover.
+      - name: Run the array-bound gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/bounds.sh --gas ${{ matrix.gas }} --keep
 
       - name: Run the regression gate
         shell: bash
@@ -121,5 +143,8 @@ jobs:
             test/_work/**/*.det
             test/_work/**/run.log
             test/_work/**/build.log
+            test/_bounds/**/*.out
+            test/_bounds/**/*.stdout
+            test/_bounds/**/build.log
           if-no-files-found: warn
           retention-days: 14
