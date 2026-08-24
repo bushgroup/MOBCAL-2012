@@ -32,6 +32,7 @@ compares against, so they are reference data and not just examples.
 + `test/bounds.sh` Array-bound gate. Checks that an input exceeding either compiled-in limit is refused with a message naming the limit and the actual count, and exits nonzero
 + `test/elements.sh` Element-table gate. Builds a probe against the real coordinate-reading subroutines and checks that every atom gets the same Lennard-Jones and hard-sphere parameters in every coordinate set
 + `test/silicon-2conf.mfj` The element gate's input: two identical coordinate sets containing silicon
++ `test/new-elements-he.mfj`, `test/new-elements-n2.mfj` The element gate's inputs for the elements added in v1.1 -- see *Supported elements* below
 + `test/build-flags.sh` The build recipe, in the one place it is written down. Sourced by all three gates
 + `test/stochastic-lines.txt` Output lines excluded from the exact comparison because they depend on the pseudo-random number stream
 + `test/strict-platforms` Platforms on which whole-file byte identity is a gating check rather than a reported one
@@ -269,6 +270,44 @@ provenance for the reference files, not as a requirement.
 ## Limitations
 + This method has been validated for drug-like small molecular ions in low pressure, ambient temperature He and N2 mobility experiment [1].  
 + This method has not been validated for other ions classes or experiments performed at high pressures or non-ambient temperatures.
+
+### Supported elements
+
+Each atom in an input file is identified by an integer mass key --
+`nint` of its atomic weight -- looked up in a table in the source. An
+unrecognized key is refused, naming the atom, the key you gave, the
+`nint(atomic weight)` convention, and the keys the build actually knows.
+
+| gas | defined keys (`nint` of atomic weight) |
+|---|---|
+| He | 1, 12, 14, 16, 19, 23, 28, 32, 35, 56, 80, 127 |
+| N2 | 1, 7, 12, 14, 16, 19, 23, 28, 31, 32, 35, 39, 56, 80, 127, 133 |
+
+Chlorine (35), bromine (80) and iodine (127) in **helium** are
+**provisional**: they were transformed from `mobcal_N2.f`'s X-X self
+parameters by a single factor (0.8602, in both the Lennard-Jones well depth
+and radius) rather than independently fitted to helium mobility data. A run
+that uses one of them prints a warning naming the atom. The same three
+elements in **nitrogen**, and lithium (7), potassium (39) and caesium (133)
+in nitrogen, are fitted the same way as every other row in that table and
+carry no such warning.
+
+All six of these new elements -- in whichever gas they appear -- borrow
+carbon's 2.7 Angstrom hard-sphere radius rather than a fitted one, which
+also prints a warning naming the atom. The hard-sphere radius affects only
+the EHSS/PA calculation (`mobcal_N2.f` does not compute one at all), never
+the trajectory method that produces the published cross section. It matters
+most for iodine, whose helium Lennard-Jones radius (3.60 Angstrom) is
+already larger than the borrowed hard-sphere radius.
+
+Phosphorus (31) is defined for nitrogen but not for helium. That is a gap in
+the underlying parameterization rather than an oversight in the code, and an
+input with phosphorus in helium is refused rather than given a guessed
+value.
+
+`CLAUDE.md`'s *The one element table* has the file-and-line detail, and
+`test/new-elements-he.mfj` / `test/new-elements-n2.mfj` are what
+`test/elements.sh` runs both warnings against.
 
 ### Size limits
 

@@ -718,6 +718,17 @@ c
 c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
 c     are reached through COMMON, as they were before.
 c
+c     v1.1 chunk 4 added chlorine, bromine, iodine, lithium, potassium
+c     and caesium, fitted the same way as the other X-X self
+c     parameters here (not transformed, unlike the He table's
+c     chlorine/bromine/iodine, so they carry no PROVISIONAL warning).
+c     All six, like every new element in this merge, borrow carbon's
+c     2.7 Angstrom hard-sphere radius rather than carrying a fitted
+c     one; that prints a warning (format 604).  It does not fire for
+c     the ten legacy elements, even though three of those already
+c     carry the same 2.7 Angstrom value under their own "(same as
+c     carbon)" comments.
+c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
       dimension imass(len),xmass(len)
@@ -850,14 +861,86 @@ c
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c
+c     chlorine
+c
+      if(imass(iatom).eq.35) then
+      itest=1
+      xmass(iatom)=35.00d0
+      eolj(iatom)=dsqrt(eogas*0.2111)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.6707)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     iodine
+c
+      if(imass(iatom).eq.127) then
+      itest=1
+      xmass(iatom)=127.00d0
+      eolj(iatom)=dsqrt(eogas*0.3153)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.1850)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     bromine
+c
+      if(imass(iatom).eq.80) then
+      itest=1
+      xmass(iatom)=80.00d0
+      eolj(iatom)=dsqrt(eogas*0.2334)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.8957)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     lithium
+c
+      if(imass(iatom).eq.7) then
+      itest=1
+      xmass(iatom)=7.00d0
+      eolj(iatom)=dsqrt(eogas*0.0250)*conve*xe
+      rolj(iatom)=dsqrt(rogas*2.4510)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     potassium
+c
+      if(imass(iatom).eq.39) then
+      itest=1
+      xmass(iatom)=39.00d0
+      eolj(iatom)=dsqrt(eogas*0.0326)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.5456)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     caesium
+c
+      if(imass(iatom).eq.133) then
+      itest=1
+      xmass(iatom)=133.00d0
+      eolj(iatom)=dsqrt(eogas*0.0419)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.2008)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
       if(itest.eq.0) then
-      write(8,602) iatom
-  602 format(1x,'type not defined for atom number',i3)
+      write(8,602) iatom,imass(iatom)
+  602 format(1x,'type not defined for atom number',i4,
+     ?' (mass key',i4,').'/
+     ?1x,'element keys are nint(atomic weight); defined keys:'/
+     ?1x,'1,7,12,14,16,19,23,28,31,32,35,39,56,80,127,133')
       close (8)
       stop
       endif
 c
- 2020 continue  
+  604 format(1x,'WARNING: hard-sphere radius for atom',i4,
+     ?' (mass key',i4,') borrowed from carbon.')
+c
+ 2020 continue
 c
       return
       end

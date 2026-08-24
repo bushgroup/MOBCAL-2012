@@ -192,6 +192,17 @@ purpose: it only has to separate two candidate rows that differ by a factor of
 single-precision literals such as `0.4020`, so the last few digits belong to the
 literal's rounding rather than to the parameter.
 
+**Chunk 4 added a second pair of fixtures**, `test/new-elements-he.mfj` and
+`test/new-elements-n2.mfj`, rather than growing `test/silicon-2conf.mfj`.
+Helium does not define lithium, potassium or caesium at all, so a fixture
+shared between both gases would refuse on helium before reaching any
+assertion. Each new fixture carries the legacy carbon/nitrogen/oxygen/fluorine
+rows alongside the new elements specifically so the two chunk-4 warnings can
+be asserted by *count* rather than by presence: nitrogen, oxygen and fluorine
+already borrow carbon's 2.7 Å hard-sphere radius, so a warning that fired on
+that value rather than on element identity would still pass a check that only
+asked "did it fire" — see *Chunk 4* below for the full reasoning.
+
 ## The one element table
 
 `ljparm` — one per source file, called by `fcoord` and by `ncoord`. Adding,
@@ -254,6 +265,63 @@ c      rolj(iatom)=3.85949064*0.890898718*1.0d-10
 — that `ncoord` did not. They are dead code, but they are the only surviving
 record of a different, non-combining parameterization, and a merge is the wrong
 moment to lose provenance. They live in `ljparm` now, still commented out.
+
+## Chunk 4 -- new elements, and two warnings
+
+`ljparm` gained twelve rows total across the two files: chlorine (35),
+bromine (80) and iodine (127) in both `mobcal_He.f` and `mobcal_N2.f`, plus
+lithium (7), potassium (39) and caesium (133) in `mobcal_N2.f` only. Rows
+came from Iain Campuzano's `mobcal_He_moreatoms.f` and
+`mobcal_n2_093COFClBrIKCs_1Li_12N_043H.f`, taken from the first of each
+file's two (pre-chunk-3) table copies -- verified to agree with the second
+copy on every one of these keys, so unlike silicon this merge carries no
+latent divergence. `mobcal_He.f` now defines 12 keys, `mobcal_N2.f` 16;
+`grep -c '^ *itest=1$'` is the check that a stray second copy has not crept
+back in.
+
+Two things about the new rows are not visible in a normal run's output, so
+each gets a warning `ljparm` prints (to unit 8, i.e. into the `.out` file)
+whenever an atom actually uses one:
+
+- **The three helium halogens are provisional.** They are not independent
+  fits to helium mobility data -- they are `mobcal_N2.f`'s X-X self
+  parameters for the same three elements, multiplied by one factor (0.8602,
+  in *both* epsilon and sigma, to four significant figures) that has no
+  derivation in either source. The nitrogen halogens, and nitrogen's three
+  alkali metals, are fitted the same way as every other row in that table and
+  carry no such warning.
+- **All six new elements, in whichever file they appear, borrow carbon's
+  2.7 Angstrom hard-sphere radius.** For iodine that radius is *smaller* than
+  its own Lennard-Jones sigma (3.60 Angstrom in helium), so the hard sphere
+  sits inside the LJ well -- harmless for the trajectory method, which never
+  uses `rhs`, but a real hazard for EHSS/PA (which `mobcal_N2.f` does not
+  compute at all, so it can only bite in helium).
+
+Both warnings are scoped to element identity, not to the value 2.7 --
+nitrogen, oxygen and fluorine already carry that same borrowed radius under
+their own decades-old "(same as carbon)" comments, and choline contains
+nitrogen and oxygen. A warning keyed on the value would have fired on the
+committed `Choline.mfj` fixture and forced an unplanned reference
+regeneration; `test/elements.sh` counts occurrences on a fixture that
+deliberately contains both the legacy and the new elements, which is what
+would catch that mistake if it were made.
+
+The `type not defined for atom number` refusal (format 602, the `itest.eq.0`
+arm) was rewritten in the same commit: it now names the mass key that was
+given, states the `nint(atomic weight)` convention, and lists the keys the
+build actually defines, using `i4` rather than `i3` so a refusal past atom
+999 -- this build's own array bound -- prints the real number instead of an
+overflowed one. `test/elements.sh` generates a throwaway 1,000-atom fixture
+to exercise exactly that, the same way `test/bounds.sh` generates its
+over-bound fixtures rather than committing them.
+
+Left alone, deliberately: phosphorus is still absent from helium (present in
+nitrogen since 2015) -- refused rather than guessed, on the same reasoning as
+silicon's fluorine/sulfur neighbours in chunk 3. The integer masses
+(chlorine 35.00 vs. 35.45, etc.), the `q1st` divisor, and the version strings
+are chunk 5's, not this one's -- taking any of them here would have meant
+regenerating `sample-output/` outside the one commit the plan reserves for
+that.
 
 ## The two array bounds
 

@@ -712,6 +712,17 @@ c
 c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
 c     are reached through COMMON, as they were before.
 c
+c     v1.1 chunk 4 added chlorine, bromine and iodine, transformed from
+c     mobcal_N2.f's self parameters by a single factor (0.8602, both
+c     epsilon and sigma) rather than fitted independently to He
+c     mobility data -- so each prints a PROVISIONAL warning (format
+c     603) when used.  All three, like every new element in this
+c     merge, borrow carbon's 2.7 Angstrom hard-sphere radius rather
+c     than carrying a fitted one; that prints its own warning (format
+c     604).  Neither warning fires for the nine legacy elements, even
+c     though three of those already carry the same 2.7 Angstrom value
+c     under their own "(same as carbon)" comments.
+c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
       dimension imass(len),xmass(len)
@@ -820,14 +831,58 @@ c
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c
+c     chlorine (same as carbon; PROVISIONAL, see README)
+c
+      if(imass(iatom).eq.35) then
+      itest=1
+      xmass(iatom)=35.00d0
+      eolj(iatom)=7.8742d-3*xe
+      rolj(iatom)=3.1576d0*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,603) iatom,imass(iatom)
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     iodine (same as carbon; PROVISIONAL, see README)
+c
+      if(imass(iatom).eq.127) then
+      itest=1
+      xmass(iatom)=127.00d0
+      eolj(iatom)=11.759d-3*xe
+      rolj(iatom)=3.6000d0*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,603) iatom,imass(iatom)
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     bromine (same as carbon; PROVISIONAL, see README)
+c
+      if(imass(iatom).eq.80) then
+      itest=1
+      xmass(iatom)=80.00d0
+      eolj(iatom)=8.7067d-3*xe
+      rolj(iatom)=3.3512d0*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,603) iatom,imass(iatom)
+      write(8,604) iatom,imass(iatom)
+      endif
+c
       if(itest.eq.0) then
-      write(8,602) iatom
-  602 format(1x,'type not defined for atom number',i3)
+      write(8,602) iatom,imass(iatom)
+  602 format(1x,'type not defined for atom number',i4,
+     ?' (mass key',i4,').'/
+     ?1x,'element keys are nint(atomic weight); defined keys:'/
+     ?1x,'1,12,14,16,19,23,28,32,35,56,80,127')
       close (8)
       stop
       endif
 c
- 2020 continue  
+  603 format(1x,'WARNING: provisional parameter used for atom',i4,
+     ?' (mass key',i4,'); see README.')
+  604 format(1x,'WARNING: hard-sphere radius for atom',i4,
+     ?' (mass key',i4,') borrowed from carbon.')
+c
+ 2020 continue
 c
       return
       end

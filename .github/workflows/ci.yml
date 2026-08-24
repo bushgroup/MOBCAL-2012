@@ -91,7 +91,8 @@ jobs:
                    Choline.mfj mobcal.in \
                    sample-output/Choline_He.out sample-output/Choline_N2.out \
                    test/regression.sh test/bounds.sh test/elements.sh \
-                   test/build-flags.sh test/silicon-2conf.mfj; do
+                   test/build-flags.sh test/silicon-2conf.mfj \
+                   test/new-elements-he.mfj test/new-elements-n2.mfj; do
             if LC_ALL=C grep -q "$(printf '\r')" "$f"; then
               echo "CR found in $f"
               bad=1

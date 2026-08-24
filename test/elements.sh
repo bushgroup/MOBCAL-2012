@@ -60,6 +60,43 @@
 # single-conformer nitrogen silicon run ever published used.
 #
 #
+# CHUNK 4 -- Cl/Br/I (both gases) and Li/K/Cs (N2 only)
+#
+# One row per new element, added to the same LJPARM subroutine chunk 3 built,
+# so the identity assertion above already covers them: an atom carrying one of
+# the new mass keys must come out of set 2 with the same parameters it came out
+# of set 1 with. test/new-elements-he.mfj and test/new-elements-n2.mfj add a
+# second, disjoint fixture for this rather than growing the silicon one,
+# because He does not define Li/K/Cs at all -- a shared fixture would refuse on
+# He before reaching the assertions.
+#
+# Two further things chunk 4 introduced are not observable from parameter
+# identity, so they get their own checks:
+#
+# - The three He halogens are PROVISIONAL (transformed from mobcal_N2.f's self
+#   parameters by one factor, 0.8602 in both epsilon and sigma, rather than
+#   independently fitted to He mobility data), and LJPARM prints a warning
+#   naming the atom whenever one is actually used. All six new elements across
+#   both files borrow carbon's 2.7 Angstrom hard-sphere radius rather than a
+#   fitted one, which prints a second warning. Both warnings are counted
+#   exactly (3 provisional atoms x 2 coordinate sets = 6 for He, and so on) --
+#   not merely "present" -- because three *legacy* elements (nitrogen, oxygen,
+#   fluorine) already carry the same borrowed 2.7 Angstrom value under their
+#   own "(same as carbon)" comments, and the choline fixture regression.sh
+#   checks contains nitrogen and oxygen. A warning keyed on the value 2.7
+#   rather than on element identity would fire on every regression.sh run and
+#   force an unplanned reference regeneration; counting it here on a fixture
+#   that also carries legacy elements is what would catch that mistake.
+#
+# - The `type not defined for atom number' refusal (format 602) was rewritten
+#   to name the mass key, state the nint(atomic weight) convention, list the
+#   defined keys, and use i4 instead of i3 so a refusal past atom 999 (this
+#   build's own array bound) prints the real number instead of an overflowed
+#   or truncated one. test/elements.sh generates a throwaway 1,000-atom fixture
+#   for exactly this, the same way test/bounds.sh generates its over-bound
+#   fixtures rather than committing them.
+#
+#
 # HOW THE PROBE IS BUILT
 #
 # The two sources each open with an unnamed main program, so they cannot be
@@ -80,6 +117,13 @@
 # confirmation -- a full two-conformer nitrogen run whose two cross sections
 # must agree -- was run by hand for the commit that introduced this file and
 # recorded there; it is not repeated per push.
+#
+# One driver binary serves every probe run in a gas's block: LJPROBE reads its
+# input filename from mobcal.in (unit 20) at start-up, so re-writing mobcal.in
+# and re-running the same executable switches fixtures without rebuilding. Unit
+# 7 (ljprobe.dat) and unit 8 (ljprobe.out) are fixed filenames the driver opens
+# itself, so each run's outputs must be read before the next run overwrites
+# them -- the script does so in fixture order.
 
 set -eu
 
@@ -133,6 +177,36 @@ check() {
     else
         fail=$((fail + 1)); FAILED=1; printf '    FAIL %s\n' "$1"
     fi
+}
+
+present() { if grep -Eq -- "$1" "$2"; then echo y; else echo n; fi; }
+absent()  { if grep -Eq -- "$1" "$2"; then echo n; else echo y; fi; }
+status()  { if [ "$1" -eq "$2" ]; then echo y; else echo n; fi; }
+
+# Every atom must come out of every coordinate set with the parameters it came
+# out of set 1 with -- text comparison, since the same table evaluated twice
+# cannot round differently.
+identical_across_sets() {
+    awk '{ key = $2
+           if ($1 == 1) { ref[key] = $3 " " $4 " " $5; next }
+           if (!(key in ref)) { bad++; next }
+           if (ref[key] != $3 " " $4 " " $5) bad++ }
+        END { print (bad ? "n" : "y") }' "$1"
+}
+
+# Pins one atom's set-1 record to expected (eps, sigma, rhs) within 1e-4
+# relative -- loose on purpose, see the silicon comment below for why.
+pin_atom() {
+    dat=$1; pos=$2; e=$3; s=$4; h=$5
+    awk -v pos="$pos" -v e="$e" -v s="$s" -v h="$h" \
+        '$1 == 1 && $2 == pos {
+             ok = 1
+             if (($3 - e) / e >  1e-4 || ($3 - e) / e < -1e-4) ok = 0
+             if (($4 - s) / s >  1e-4 || ($4 - s) / s < -1e-4) ok = 0
+             if (($5 - h) / h >  1e-4 || ($5 - h) / h < -1e-4) ok = 0
+             print (ok ? "y" : "n"); seen = 1
+         }
+         END { if (!seen) print "n" }' "$dat"
 }
 
 # --- the driver ------------------------------------------------------------
@@ -241,6 +315,27 @@ EPILOGUE
     } > "$out"
 }
 
+# A throwaway 1,000-atom fixture (this build's own array bound, len=1000 in
+# mobcal_limits.inc) whose last atom carries a mass key neither table defines.
+# Generated rather than committed, the same reasoning as test/bounds.sh's
+# over-bound fixtures: it is real filler, not hand-typed geometry, and
+# regenerating it if the bound ever changes costs nothing.
+write_undefined_1000() {
+    out=$1
+    { echo "elements gate: undefined key at atom number 1000 (i4 fix)"
+      echo 1
+      echo 1000
+      echo ang
+      echo calc
+      echo 1.0000
+      awk 'BEGIN{
+          for (i = 1; i <= 999; i++)
+              printf "%12.5f%13.5f%13.5f%4d%15.6f\n", i * 0.1, 0.0, 0.0, 1, 0.1
+          printf "%12.5f%13.5f%13.5f%4d%15.6f\n", 100.0, 0.0, 0.0, 999, 0.1
+      }'
+    } > "$out"
+}
+
 # --- per gas ---------------------------------------------------------------
 #
 # Expected silicon values. The tolerance only has to separate the two candidate
@@ -248,20 +343,32 @@ EPILOGUE
 # relative is decisive with room to spare. It is not tighter than that on
 # purpose: the nitrogen table multiplies a double by single-precision literals
 # such as 0.4020, so the last few digits are a property of the literal's
-# single-precision rounding rather than of the parameter.
+# single-precision rounding rather than of the parameter. The same tolerance
+# is used below for the new elements' pinned values, computed in double
+# precision from Iain's per-element factors; the single-precision rounding
+# those literals pick up in the real build is on the order of 1e-7 relative,
+# well inside this margin.
 
 for gas in $GASES; do
     case "$gas" in
         he) src=mobcal_He.f
-            si_eps=1.35e-3 ; si_sig=3.5        ; si_rhs=2.95 ;;
+            si_eps=1.35e-3 ; si_sig=3.5        ; si_rhs=2.95
+            itest_want=12 ; prov_want=6 ; borrow_want=6 ;;
         n2) src=mobcal_N2.f
-            si_eps=7.249792567e-3 ; si_sig=3.532242086 ; si_rhs=2.95 ;;
+            si_eps=7.249792567e-3 ; si_sig=3.532242086 ; si_rhs=2.95
+            itest_want=16 ; prov_want=0 ; borrow_want=12 ;;
         *)  echo "elements.sh: unknown gas '$gas'" >&2; exit 2 ;;
     esac
 
     d="$WORK/$gas"
     mkdir -p "$d"
     echo "=== $gas ============================================================"
+
+    # One element table per source file, not a reintroduced second copy: every
+    # itest=1 line belongs to exactly one row of exactly one table.
+    got_itest=$(grep -c '^ *itest=1$' "$ROOT/$src")
+    check "exactly one element table ($got_itest itest=1 lines, want $itest_want)" \
+          "$(status "$got_itest" "$itest_want")"
 
     # Everything from the first subroutine statement on. The main program is
     # the first program unit in both files and FCOORD is the second, so this
@@ -294,13 +401,15 @@ for gas in $GASES; do
     fi
     echo "  warnings     : $(grep -c '^Warning:' "$d/build.log" || true)"
 
+    # --- silicon, two identical conformers (chunk 3's original fixture) ----
+
     cp "$MFJ" "$d/silicon.mfj"
     printf '%s\n%s\n%s\n' silicon.mfj ljprobe.out 96 > "$d/mobcal.in"
     if ( cd "$d" && ./ljprobe > probe.stdout 2>&1 ); then st=0; else st=$?; fi
     DAT="$d/ljprobe.dat"
     [ -f "$DAT" ] || : > "$DAT"
 
-    echo "  --- probe (exit $st) ---"
+    echo "  --- probe: silicon (exit $st) ---"
 
     if [ "$st" -ne 0 ]; then
         check "the probe ran" n
@@ -312,43 +421,114 @@ for gas in $GASES; do
 
     want=$((NCRD * NATOM))
     got=$(grep -c . "$DAT" || true)
-    if [ "$got" -eq "$want" ]; then r=y; else r=n; fi
-    check "every coordinate set was reached ($got of $want records)" "$r"
+    check "every coordinate set was reached ($got of $want records)" \
+          "$(status "$got" "$want")"
 
     # The headline assertion. Set 1's record for each atom is the referent;
-    # every later set must reproduce all three values exactly, as text, since
-    # the same table evaluated twice cannot round differently.
-    r=$(awk '{ key = $2
-               if ($1 == 1) { ref[key] = $3 " " $4 " " $5; next }
-               if (!(key in ref)) { bad++; next }
-               if (ref[key] != $3 " " $4 " " $5) bad++ }
-        END { print (bad ? "n" : "y") }' "$DAT")
-    check "every atom has identical parameters in every coordinate set" "$r"
+    # every later set must reproduce all three values exactly.
+    check "every atom has identical parameters in every coordinate set" \
+          "$(identical_across_sets "$DAT")"
 
     # Silicon is atom 1 of the fixture. Assert on it in set 1, which is the
     # set that was always right, so this pins the value the merge adopted
     # rather than merely agreeing with whatever set 2 produced.
-    r=$(awk -v e="$si_eps" -v s="$si_sig" -v h="$si_rhs" \
-        '$1 == 1 && $2 == 1 {
-             ok = 1
-             if (($3 - e) / e >  1e-4 || ($3 - e) / e < -1e-4) ok = 0
-             if (($4 - s) / s >  1e-4 || ($4 - s) / s < -1e-4) ok = 0
-             if (($5 - h) / h >  1e-4 || ($5 - h) / h < -1e-4) ok = 0
-             print (ok ? "y" : "n"); seen = 1
-         }
-         END { if (!seen) print "n" }' "$DAT")
-    check "silicon carries the adopted well depth, radius and hard-sphere radius" "$r"
+    check "silicon carries the adopted well depth, radius and hard-sphere radius" \
+          "$(pin_atom "$DAT" 1 "$si_eps" "$si_sig" "$si_rhs")"
+
+    # Neither of chunk 4's warnings has any business firing here: this fixture
+    # carries only hydrogen and silicon, neither provisional nor new. Nitrogen,
+    # oxygen and fluorine -- which DO already carry the same borrowed 2.7
+    # Angstrom hard-sphere radius under "(same as carbon)" -- aren't in this
+    # fixture either, so this is only a first line of defence; the real test
+    # of that distinction is the new-elements fixture below, which contains
+    # them.
+    check "no chunk-4 warning fires on legacy-only elements" \
+          "$(absent 'WARNING' "$d/ljprobe.out")"
 
     # Refusals still work: the table's own `type not defined' stop moved into
-    # the shared subroutine along with the rows, so it has to still fire.
-    # The driver names its own output file, so the refusal lands in
-    # ljprobe.out, which this run overwrites. The parameter records above have
-    # already been read, so overwriting costs nothing.
+    # the shared subroutine along with the rows, so it has to still fire, now
+    # naming the mass key and the nint(atomic weight) convention rather than
+    # just the atom number.
     sed 's/  28  /  99  /' "$MFJ" > "$d/undefined.mfj"
     printf '%s\n%s\n%s\n' undefined.mfj ljprobe.out 96 > "$d/mobcal.in"
     ( cd "$d" && ./ljprobe > undefined.stdout 2>&1 ) || true
-    if grep -q 'type not defined for atom number' "$d/ljprobe.out"; then r=y; else r=n; fi
-    check "an undefined element is still refused" "$r"
+    r=y
+    [ "$(present 'type not defined for atom number' "$d/ljprobe.out")" = y ] || r=n
+    [ "$(present 'nint\(atomic weight\)'             "$d/ljprobe.out")" = y ] || r=n
+    [ "$(present '\(mass key *99\)'                  "$d/ljprobe.out")" = y ] || r=n
+    check "an undefined element is refused, naming the mass key and the key convention" "$r"
+
+    # --- the six new elements, plus the legacy elements that share their
+    # --- borrowed hard-sphere radius ---------------------------------------
+
+    cp "$ROOT/test/new-elements-$gas.mfj" "$d/new-elements.mfj"
+    printf '%s\n%s\n%s\n' new-elements.mfj ljprobe.out 96 > "$d/mobcal.in"
+    if ( cd "$d" && ./ljprobe > newelements.stdout 2>&1 ); then st2=0; else st2=$?; fi
+
+    echo "  --- probe: new elements (exit $st2) ---"
+
+    if [ "$st2" -ne 0 ]; then
+        check "the new-elements probe ran" n
+        sed 's/^/      /' "$d/newelements.stdout"
+        echo
+        continue
+    fi
+    check "the new-elements probe ran" y
+
+    check "new elements: identical parameters in every coordinate set" \
+          "$(identical_across_sets "$DAT")"
+
+    # Atom positions in test/new-elements-$gas.mfj: 1-4 are the legacy
+    # carbon/nitrogen/oxygen/fluorine rows (present so the warning-count
+    # assertions below can prove the borrowed-rhs warning does NOT fire on
+    # them); everything from position 5 on is new.
+    case "$gas" in
+        he)
+            check "chlorine pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 5 7.8742e-3  3.1576 2.7)"
+            check "bromine  pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 6 8.7067e-3  3.3512 2.7)"
+            check "iodine   pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 7 11.759e-3  3.6000 2.7)"
+            ;;
+        n2)
+            check "chlorine  pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 5  5.2535959769e-3 3.2654521375 2.7)"
+            check "bromine   pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 6  5.5241184196e-3 3.3640437045 2.7)"
+            check "iodine    pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 7  6.4205841070e-3 3.4867162664 2.7)"
+            check "lithium   pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 8  1.8079339426e-3 2.6683361029 2.7)"
+            check "potassium pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 9  2.0645307417e-3 3.2093253462 2.7)"
+            check "caesium   pinned to Iain's parameters" \
+                  "$(pin_atom "$DAT" 10 2.3405588512e-3 3.4932919198 2.7)"
+            ;;
+    esac
+
+    # Counted, not merely detected -- see the header comment on why "fires at
+    # all" would not distinguish the new elements from the legacy ones that
+    # happen to share the same 2.7 Angstrom hard-sphere radius. Each of the
+    # NCRD identical coordinate sets re-triggers every warning once.
+    pc=$(grep -c 'WARNING: provisional'      "$d/ljprobe.out" || true)
+    bc=$(grep -c 'borrowed from carbon'      "$d/ljprobe.out" || true)
+    check "provisional-parameter warning fires exactly $prov_want time(s) (got $pc)" \
+          "$(status "$pc" "$prov_want")"
+    check "borrowed-hard-sphere-radius warning fires exactly $borrow_want time(s) (got $bc)" \
+          "$(status "$bc" "$borrow_want")"
+
+    # --- an undefined key past atom 999, to catch the i4/i3 truncation -----
+
+    write_undefined_1000 "$d/undefined-1000.mfj"
+    printf '%s\n%s\n%s\n' undefined-1000.mfj ljprobe.out 96 > "$d/mobcal.in"
+    if ( cd "$d" && ./ljprobe > undefined1000.stdout 2>&1 ); then st4=0; else st4=$?; fi
+    r=y
+    [ "$(present '(^|[^0-9])1000([^0-9]|$)'          "$d/ljprobe.out")" = y ] || r=n
+    [ "$(present 'type not defined for atom number'  "$d/ljprobe.out")" = y ] || r=n
+    [ "$(absent  '\*\*\*\*'                          "$d/ljprobe.out")" = y ] || r=n
+    check "atom number 1000 is named without truncation or overflow (i4 fix)" "$r"
+    check "exit status is 0 (pre-existing bare stop)" "$(status "$st4" 0)"
 
     echo
 done
