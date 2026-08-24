@@ -90,7 +90,8 @@ jobs:
           for f in mobcal_He.f mobcal_N2.f mobcal_limits.inc \
                    Choline.mfj mobcal.in \
                    sample-output/Choline_He.out sample-output/Choline_N2.out \
-                   test/regression.sh test/bounds.sh test/build-flags.sh; do
+                   test/regression.sh test/bounds.sh test/elements.sh \
+                   test/build-flags.sh test/silicon-2conf.mfj; do
             if LC_ALL=C grep -q "$(printf '\r')" "$f"; then
               echo "CR found in $f"
               bad=1
@@ -129,6 +130,18 @@ jobs:
           FC: ${{ steps.fortran.outputs.fc }}
         run: sh test/bounds.sh --gas ${{ matrix.gas }} --keep
 
+      # Also seconds, and for the same reason: the probe it builds calls FCOORD
+      # and NCOORD directly and never integrates a trajectory. It is the only
+      # gate that can see the per-element Lennard-Jones parameters at all --
+      # they reach no line of the regression gate's deterministic tier, and for
+      # coordinate sets after the first the program cannot print them under any
+      # print switch.
+      - name: Run the element-table gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/elements.sh --gas ${{ matrix.gas }} --keep
+
       - name: Run the regression gate
         shell: bash
         env:
@@ -151,5 +164,10 @@ jobs:
             test/_bounds/**/*.out
             test/_bounds/**/*.stdout
             test/_bounds/**/build.log
+            test/_elements/**/*.out
+            test/_elements/**/*.dat
+            test/_elements/**/*.stdout
+            test/_elements/**/ljprobe.f
+            test/_elements/**/build.log
           if-no-files-found: warn
           retention-days: 14

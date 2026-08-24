@@ -611,6 +611,116 @@ c
   615 format(1x,'total charge =',1pe11.4,/1x,
      ?'total absolute charge =',e11.4)
 c
+      call ljparm(imass,xmass)
+      m2=0.d0
+      do 2021 iatom=1,inatom
+ 2021 m2=m2+xmass(iatom)
+      write(8,604) m2
+  604 format(1x,'mass of ion =',1pd11.4)
+      do 2030 iatom=1,inatom
+      rhs2(iatom)=rhs(iatom)*rhs(iatom)
+      eox4(iatom)=4.d0*eolj(iatom)
+      ro2lj=rolj(iatom)*rolj(iatom)
+      ro6lj(iatom)=ro2lj*ro2lj*ro2lj
+      ro12lj(iatom)=ro6lj(iatom)*ro6lj(iatom)
+      dro6(iatom)=6.d0*ro6lj(iatom)
+ 2030 dro12(iatom)=12.d0*ro12lj(iatom)
+c
+c
+      if(iu1.eq.1) write(8,620)
+  620 format(/9x,'initial coordinates',9x,'mass',3x,'charge',
+     ?9x,'LJ parameters',/)
+c
+      fxo=0.d0
+      fyo=0.d0
+      fzo=0.d0
+      do 2009 iatom=1,inatom
+      fxo=fxo+(fx(iatom)*xmass(iatom))
+      fyo=fyo+(fy(iatom)*xmass(iatom))
+ 2009 fzo=fzo+(fz(iatom)*xmass(iatom))
+      fxo=fxo/m2
+      fyo=fyo/m2
+      fzo=fzo/m2
+      write(8,623) fxo,fyo,fzo
+  623 format(1x,'center of mass coordinates = ',1pe11.4,',',e11.4,
+     ?',',e11.4)
+      do 2010 iatom=1,inatom
+      fx(iatom)=(fx(iatom)-fxo)*1.d-10*correct
+      fy(iatom)=(fy(iatom)-fyo)*1.d-10*correct
+      fz(iatom)=(fz(iatom)-fzo)*1.d-10*correct
+      if(iu1.eq.1) write(8,600) fx(iatom),fy(iatom),fz(iatom),
+     ?imass(iatom),pcharge(iatom),eolj(iatom)/xe,rolj(iatom)*1.0d10
+  600 format(1x,1pe11.4,1x,e11.4,1x,e11.4,1x,i3,1x,
+     ?e11.4,1x,e11.4,1x,e11.4)
+ 2010 continue
+      if(iu1.eq.1) write(8,621)
+  621 format(/)
+c
+      if(icoord.eq.1) close (9)
+c
+      do 3000 iatom=1,inatom
+      ox(iatom)=fx(iatom)
+      oy(iatom)=fy(iatom)
+ 3000 oz(iatom)=fz(iatom)
+c
+      romax=0.d0
+      do 3001 iatom=1,inatom
+ 3001 if(rolj(iatom).gt.romax) romax=rolj(iatom)
+c
+c     determine structural asymmetry parameter
+c
+      theta=0.d0
+      asymp=0.d0
+      do 5000 igamma=0,360,2
+      do 5000 iphi=0,180,2
+      gamma=dfloat(igamma)/cang
+      phi=dfloat(iphi)/cang
+      call rotate
+      xyzsum=0.d0
+      yzsum=0.d0
+      do 5005 iatom=1,inatom
+      xyz=dsqrt(fx(iatom)**2+fy(iatom)**2+fz(iatom)**2)
+      yz=dsqrt(fy(iatom)**2+fz(iatom)**2)
+      xyzsum=xyzsum+xyz
+      yzsum=yzsum+yz
+ 5005 continue
+      hold=((pi/4.d0)*xyzsum)/yzsum
+      if(hold.gt.asymp) asymp=hold
+ 5000 continue
+c
+      return
+      end
+c
+c     ***************************************************************
+c
+      subroutine ljparm(imass,xmass)
+c
+c     The per-element parameter table: atomic mass, Lennard-Jones well
+c     depth and radius, and hard-sphere radius, for every atom of the
+c     current coordinate set.  Refuses an element it does not know.
+c
+c     One table, called by both FCOORD (coordinate set 1) and NCOORD
+c     (sets 2...icoord).  Before v1.1 it was written out twice per
+c     source file and the two copies had already diverged: NCOORD in
+c     mobcal_N2.f carried iron's well depth and radius under silicon's
+c     comment, so every conformer after the first of a multi-conformer
+c     nitrogen run containing silicon was computed with iron's
+c     parameters, and nothing in the output said so.  A subroutine
+c     rather than an include, because a subroutine can be called
+c     directly by a test and cannot silently diverge again.
+c
+c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
+c     are reached through COMMON, as they were before.
+c
+      implicit double precision (a-h,m-z)
+      include 'mobcal_limits.inc'
+      dimension imass(len),xmass(len)
+      common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
+     ?xe,xk,xn,mconst,correct,romax,inatom,icoord,iic
+      common/ljparameters/eolj(len),rolj(len),eox4(len),
+     ?ro6lj(len),ro12lj(len),dro6(len),dro12(len)
+      common/hsparameters/rhs(len),rhs2(len)
+c
       do 2020 iatom=1,inatom
       itest=0
 c             
@@ -718,81 +828,6 @@ c
       endif
 c
  2020 continue  
-      m2=0.d0
-      do 2021 iatom=1,inatom
- 2021 m2=m2+xmass(iatom)
-      write(8,604) m2
-  604 format(1x,'mass of ion =',1pd11.4)
-      do 2030 iatom=1,inatom
-      rhs2(iatom)=rhs(iatom)*rhs(iatom)
-      eox4(iatom)=4.d0*eolj(iatom)
-      ro2lj=rolj(iatom)*rolj(iatom)
-      ro6lj(iatom)=ro2lj*ro2lj*ro2lj
-      ro12lj(iatom)=ro6lj(iatom)*ro6lj(iatom)
-      dro6(iatom)=6.d0*ro6lj(iatom)
- 2030 dro12(iatom)=12.d0*ro12lj(iatom)
-c
-c
-      if(iu1.eq.1) write(8,620)
-  620 format(/9x,'initial coordinates',9x,'mass',3x,'charge',
-     ?9x,'LJ parameters',/)
-c
-      fxo=0.d0
-      fyo=0.d0
-      fzo=0.d0
-      do 2009 iatom=1,inatom
-      fxo=fxo+(fx(iatom)*xmass(iatom))
-      fyo=fyo+(fy(iatom)*xmass(iatom))
- 2009 fzo=fzo+(fz(iatom)*xmass(iatom))
-      fxo=fxo/m2
-      fyo=fyo/m2
-      fzo=fzo/m2
-      write(8,623) fxo,fyo,fzo
-  623 format(1x,'center of mass coordinates = ',1pe11.4,',',e11.4,
-     ?',',e11.4)
-      do 2010 iatom=1,inatom
-      fx(iatom)=(fx(iatom)-fxo)*1.d-10*correct
-      fy(iatom)=(fy(iatom)-fyo)*1.d-10*correct
-      fz(iatom)=(fz(iatom)-fzo)*1.d-10*correct
-      if(iu1.eq.1) write(8,600) fx(iatom),fy(iatom),fz(iatom),
-     ?imass(iatom),pcharge(iatom),eolj(iatom)/xe,rolj(iatom)*1.0d10
-  600 format(1x,1pe11.4,1x,e11.4,1x,e11.4,1x,i3,1x,
-     ?e11.4,1x,e11.4,1x,e11.4)
- 2010 continue
-      if(iu1.eq.1) write(8,621)
-  621 format(/)
-c
-      if(icoord.eq.1) close (9)
-c
-      do 3000 iatom=1,inatom
-      ox(iatom)=fx(iatom)
-      oy(iatom)=fy(iatom)
- 3000 oz(iatom)=fz(iatom)
-c
-      romax=0.d0
-      do 3001 iatom=1,inatom
- 3001 if(rolj(iatom).gt.romax) romax=rolj(iatom)
-c
-c     determine structural asymmetry parameter
-c
-      theta=0.d0
-      asymp=0.d0
-      do 5000 igamma=0,360,2
-      do 5000 iphi=0,180,2
-      gamma=dfloat(igamma)/cang
-      phi=dfloat(iphi)/cang
-      call rotate
-      xyzsum=0.d0
-      yzsum=0.d0
-      do 5005 iatom=1,inatom
-      xyz=dsqrt(fx(iatom)**2+fy(iatom)**2+fz(iatom)**2)
-      yz=dsqrt(fy(iatom)**2+fz(iatom)**2)
-      xyzsum=xyzsum+xyz
-      yzsum=yzsum+yz
- 5005 continue
-      hold=((pi/4.d0)*xyzsum)/yzsum
-      if(hold.gt.asymp) asymp=hold
- 5000 continue
 c
       return
       end
@@ -2639,113 +2674,7 @@ c
       endif
  2000 continue
 c
-      do 2020 iatom=1,inatom
-      itest=0
-c
-c     hydrogen (average value of eo from ab initio calculations
-c     and ro from fitting mobilities of C6H6 and others) 
-c
-      if(imass(iatom).eq.1) then
-      itest=1
-      xmass(iatom)=1.008d0
-      eolj(iatom)=0.6175d-03*xe
-      rolj(iatom)=2.2610d0*1.0d-10
-      rhs(iatom)=2.2d0*1.0d-10
-      endif
-c
-c     carbon (from fitting C60 mobility)
-c
-      if(imass(iatom).eq.12) then
-      itest=1
-      xmass(iatom)=12.01d0
-      eolj(iatom)=1.3266d-3*xe
-      rolj(iatom)=3.0126d0*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     nitrogen (same as carbon)
-c
-      if(imass(iatom).eq.14) then
-      itest=1
-      xmass(iatom)=14.01d0
-      eolj(iatom)=1.4740d-3*xe
-      rolj(iatom)=3.3473d0*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c     
-c     oxygen (same as carbon)
-c
-      if(imass(iatom).eq.16) then
-      itest=1
-      xmass(iatom)=16.00d0
-      eolj(iatom)=1.0720d-3*xe
-      rolj(iatom)=2.4344d0*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     sodium - Na+ from fitting potential derived by Viehland 
-c     (Chem. Phys. 85 (1984) 291) for Na+ + He interactions from mobility
-c     data. Note 12-6-4 doesn't provide a very good fit to Viehland's 
-c     potential. Viehland's potential is flatter at small r. We didn't
-c     include Viehland's first three points in the fit.
-c     Hard sphere radius from fitting 300 K Na+ low field mobility in He.
-c
-      if(imass(iatom).eq.23) then
-      itest=1
-      xmass(iatom)=22.99d0
-      eolj(iatom)=0.0278d-3*xe
-      rolj(iatom)=(3.97d0/1.12246d0)*1.0d-10
-      rhs(iatom)=2.853d0*1.0d-10
-      endif
-c
-c     silicon (from fitting mobilities of small silicon clusters)
-c
-      if(imass(iatom).eq.28) then
-      itest=1
-      xmass(iatom)=28.09d0
-      eolj(iatom)=1.35d-3*xe
-      rolj(iatom)=3.5d0*1.0d-10
-      rhs(iatom)=2.95d0*1.0d-10
-      endif
-c
-c     sulfur (same as silicon)
-c
-      if(imass(iatom).eq.32) then
-      itest=1
-      xmass(iatom)=32.06d0
-      eolj(iatom)=1.35d-3*xe
-      rolj(iatom)=3.5d0*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     iron (same as silicon)
-c
-      if(imass(iatom).eq.56) then
-      itest=1
-      xmass(iatom)=55.85d0
-      eolj(iatom)=1.35d-3*xe
-      rolj(iatom)=3.5d0*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     fluorine (same as carbon)
-c
-      if(imass(iatom).eq.19) then
-      itest=1
-      xmass(iatom)=19.00d0
-      eolj(iatom)=1.0720d-3*xe
-      rolj(iatom)=2.4344d0*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-      if(itest.eq.0) then
-      write(8,602) iatom
-  602 format(1x,'type not defined for atom number',i3)
-      close (8)
-      stop
-      endif
-c
- 2020 continue  
+      call ljparm(imass,xmass)
 c
       mx=0.d0
       do 2021 iatom=1,inatom

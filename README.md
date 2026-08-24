@@ -27,16 +27,18 @@ compares against, so they are reference data and not just examples.
 
 ### Repository
 + `LICENSE` GNU General Public License, version 3
-+ `CLAUDE.md` Contributor notes: the two gates, line endings, and build flags
++ `CLAUDE.md` Contributor notes: the three gates, line endings, and build flags
 + `test/regression.sh` Regression gate. Builds both sources, runs `Choline.mfj` at the seed recorded in the reference outputs, and compares the result against `sample-output/`
 + `test/bounds.sh` Array-bound gate. Checks that an input exceeding either compiled-in limit is refused with a message naming the limit and the actual count, and exits nonzero
-+ `test/build-flags.sh` The build recipe, in the one place it is written down. Sourced by both gates
++ `test/elements.sh` Element-table gate. Builds a probe against the real coordinate-reading subroutines and checks that every atom gets the same Lennard-Jones and hard-sphere parameters in every coordinate set
++ `test/silicon-2conf.mfj` The element gate's input: two identical coordinate sets containing silicon
++ `test/build-flags.sh` The build recipe, in the one place it is written down. Sourced by all three gates
 + `test/stochastic-lines.txt` Output lines excluded from the exact comparison because they depend on the pseudo-random number stream
 + `test/strict-platforms` Platforms on which whole-file byte identity is a gating check rather than a reported one
-+ `.github/workflows/ci.yml` Runs both gates on Linux, macOS, and Windows, one job per platform and gas
++ `.github/workflows/ci.yml` Runs all three gates on Linux, macOS, and Windows, one job per platform and gas
 + `.githooks/commit-msg` Normalizes the AI-assistance attribution trailer. Enable it once per clone with `git config core.hooksPath .githooks`
 + `.gitattributes` Pins line endings to LF, in the repository and in the working tree, so the byte comparison means the same thing on every platform
-+ `.gitignore` Build products and the scratch directories the two gates run in
++ `.gitignore` Build products and the scratch directories the three gates run in
 
 ## Environment
 All results in [1] were calculated by Iain Campuzano in a Linux environment. The code
@@ -71,7 +73,7 @@ to install.
 
 **These are the flags the continuous-integration matrix uses** — three platforms,
 both gases, compared against the reference outputs published with [1].
-`test/build-flags.sh` holds the authoritative copy, and both gates source it; if
+`test/build-flags.sh` holds the authoritative copy, and all three gates source it; if
 you change the flags in one place, change them in the other.
 
 Earlier versions of this file recommended `g77` and advised against optimization
@@ -230,6 +232,22 @@ sh test/bounds.sh --gas he
 
 It finishes in seconds, because every case it runs is designed to terminate
 before a single trajectory is integrated. See *Size limits* below.
+
+A third gate, also seconds, checks the per-element parameter table:
+
+```sh
+sh test/elements.sh --gas he
+```
+
+Each atom's Lennard-Jones and hard-sphere parameters are looked up by integer
+mass from a table in the source. Those parameters never appear in the output
+file for any coordinate set after the first, so this gate calls the
+coordinate-reading subroutines directly and reads the values back out. It runs
+an input of two identical coordinate sets and requires every atom to come out of
+both with identical parameters. Before v1.1 that was not true in nitrogen: the
+table was written out twice and the second copy gave silicon iron's values, so a
+multi-conformer run containing silicon silently changed parameters after the
+first conformer.
 
 ### Tested compilers
 
