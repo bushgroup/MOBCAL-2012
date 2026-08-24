@@ -108,9 +108,14 @@ jobs:
           # of mobcal_He.f measured 90,793 bytes against an 88,015-byte blob --
           # so the number next to git's own idea of the blob size is the useful
           # thing to see in a log.
+          # Every line here must stay indented inside this block scalar. A
+          # backslash continuation starting at column 0 dedents out of the
+          # YAML block and makes the whole workflow file unparseable, which
+          # fails the run in 0s with no job ever starting.
           for f in mobcal_He.f mobcal_N2.f; do
-            echo "$f: $(wc -c < "$f") bytes on disk, \
-$(git cat-file -s "$(git rev-parse "HEAD:$f")") bytes in the blob"
+            disk=$(wc -c < "$f")
+            blob=$(git cat-file -s "$(git rev-parse "HEAD:$f")")
+            echo "$f: $disk bytes on disk, $blob bytes in the blob"
           done
 
       # Before the regression gate, not after. This one finishes in seconds
