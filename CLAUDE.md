@@ -215,6 +215,35 @@ holds He–X *pair* parameters directly (`eolj(iatom)=1.3266d-3*xe`).
 with the gas (`dsqrt(eogas*0.0977)*conve*xe`). Merging them would require
 inventing a conversion that does not exist in either source.
 
+`docs/parameters.md` derives every parameter in both tables and is the place to
+look before changing a number. The load-bearing result, established after Iain
+Campuzano supplied the provenance in August 2026: **`mobcal_N2.f`'s table is
+Rappé's UFF throughout.** All 32 literals are `x_I` and `D_I` times one factor
+per element — 0.43 hydrogen, 1.20 nitrogen, 0.93 carbon/oxygen/fluorine/the
+halogens/potassium/caesium, 1.00 for lithium, sodium, silicon, phosphorus,
+sulfur and iron — to five significant figures, the residual being the rounding
+of the four-decimal literals. `mobcal_He.f`'s nine legacy rows are *not* UFF;
+they are direct helium mobility fits, and the three added in v1.1 are UFF
+scaled by 0.80. Two facts follow that are worth knowing here rather than
+there:
+
++ **The per-row provenance comments in `mobcal_N2.f` were about the wrong
+  file.** "from fitting C60 mobility", the Viehland note on sodium, "from
+  fitting mobilities of small silicon clusters", every "(same as carbon)" and
+  "(same as silicon)" — all copied from `mobcal_He.f` when the nitrogen table
+  was written, where they are correct, and describing nothing once the row
+  became a scaled UFF value. Each now names the factor applied; the Viehland
+  paragraph is kept verbatim and attributed to the helium file. `mobcal_He.f`
+  keeps its originals except fluorine's, which claimed carbon and is a
+  verbatim copy of oxygen.
++ **`conve` is 0.382 % high and must stay so.** `conve=(4.2d0*0.01036427)`
+  writes 4.2 kJ per kcal where the figure is 4.184; 0.01036427 eV per kJ/mol is
+  exact. So every well depth in that table is uniformly high by 4.2/4.184 =
+  1.0038241. It is inside every published nitrogen result *and* inside the
+  scaling factors above, which were fitted with it in place. Same class of
+  hazard as the single-precision literals below: a correct-looking correction
+  that moves published output.
+
 Four things to know before editing it:
 
 **The single-precision literals are load-bearing.** `dsqrt(eogas*0.4020)`
@@ -253,6 +282,12 @@ is the value every *single*-conformer N2 silicon run ever published used.
 Adopting `ncoord`'s would have silently changed results that were right in order
 to preserve ones that were wrong.
 
+**And the UFF derivation settles it independently.** `fcoord`'s 0.4020 / 4.2950
+is UFF silicon exactly (0.402 / 4.295, factor 1.00). `ncoord`'s 0.0130 / 2.9120
+is UFF **iron** exactly. The row chosen was right on its own terms, not merely
+right because published runs had used it — which is a stronger position than
+the one chunk 3 could argue from.
+
 **The four commented-out alternate parameter pairs were kept.** `fcoord` in
 `mobcal_N2.f` carried eight commented-out lines — an alternate `eolj`/`rolj`
 pair for carbon, nitrogen, oxygen and sulfur, e.g.
@@ -283,13 +318,26 @@ Two things about the new rows are not visible in a normal run's output, so
 each gets a warning `ljparm` prints (to unit 8, i.e. into the `.out` file)
 whenever an atom actually uses one:
 
-- **The three helium halogens are provisional.** They are not independent
-  fits to helium mobility data -- they are `mobcal_N2.f`'s X-X self
-  parameters for the same three elements, multiplied by one factor (0.8602,
-  in *both* epsilon and sigma, to four significant figures) that has no
-  derivation in either source. The nitrogen halogens, and nitrogen's three
-  alkali metals, are fitted the same way as every other row in that table and
-  carry no such warning.
+- **The three helium halogens are provisional.** They are not fits to helium
+  mobility data. Each is UFF `x_I` and `D_I` scaled by 0.80 -- sigma exact to
+  six digits, epsilon to the five figures written, at 43.360 meV per kcal/mol
+  -- and inserted directly as a He-X *pair* parameter. Two steps
+  `mobcal_N2.f` applies to the same UFF numbers are skipped: the
+  geometric-mean combining rule with the gas, and the r_min-to-sigma factor
+  2^(-1/6) it applies as `convr` (with it, iodine's sigma would be 3.207 rather
+  than 3.600 Angstrom). And the 0.80 is attested in none of the three papers
+  cited for these parameters, all of which are nitrogen studies. The nitrogen
+  halogens, and nitrogen's three alkali metals, are fitted the same way as
+  every other row in that table and carry no such warning.
+
+  **This entry read "0.8602" through chunk 4, and that was wrong.** The
+  comparison was against `mobcal_N2.f`'s literals, which are themselves
+  already scaled by 0.93; 0.80/0.93 = 0.8602. The factor is 0.80 and it
+  applies to UFF. Nothing about the *code* changed when this was corrected --
+  the warning fires on exactly the same rows for exactly the same reason -- but
+  a repository that states a derived quantity as if it were fundamental has
+  mislabelled its own evidence, and every later argument that leaned on
+  "no derivation in either source" inherited that.
 - **All six new elements, in whichever file they appear, borrow carbon's
   2.7 Angstrom hard-sphere radius.** For iodine that radius is *smaller* than
   its own Lennard-Jones sigma (3.60 Angstrom in helium), so the hard sphere
@@ -396,6 +444,67 @@ of the six chunk-4 elements (chlorine 35.00 against 35.45, and five more), which
 are inconsistent with all ten legacy rows carrying real atomic weights to four
 significant figures. Neither touches choline, so neither needs this commit's
 regeneration and both can land on their own terms.
+
+## Chunk 8 -- where the parameters actually come from
+
+Chunk 4 merged twelve rows it could not account for, and said so in two
+warnings. In August 2026 Iain Campuzano supplied the provenance: a universal
+force field scaling factor per element -- 0.93 for C, O, F, Cl, Br, I, K and Cs;
+1.20 for N; 0.43 for H; none for Li -- with sodium pre-existing and not
+re-optimized, and three papers (`README.md` refs 1, 5, 6). Chunk 8 is what
+checking that against the source produced. It moves no number and regenerates
+nothing; `docs/parameters.md` is the deliverable.
+
+**The attached source file carried no new code.** Iain's
+`mobcal_n2_093COFClBrIKCs_1Li_12N_043H.f` is byte-identical (md5 `ff0c6b41...`)
+to the copy chunk 4 merged from, and every row already agreed. Anyone tempted to
+re-merge it should check the hash first.
+
+Four results, in descending order of how much they change what the repository
+can claim.
+
+**`mobcal_N2.f`'s table is UFF and nothing but UFF.** All 32 literals are
+Rappe's `x_I` and `D_I` times the stated factor, to five significant figures,
+the residual being the rounding of the four-decimal literals. Nothing was
+fitted row by row; there is one force field and sixteen multiplications. That
+is a much stronger statement than "these came from Iain", and it means a
+future row can be checked rather than trusted.
+
+**The helium halogens are UFF x 0.80, and the "0.8602" this repository stated
+for four chunks was an artifact of its own comparison.** Chunk 4 compared those
+rows against `mobcal_N2.f`'s literals, which are themselves 0.93-scaled;
+0.80/0.93 = 0.8602. The correction changes no code -- the warning fires on the
+same rows for the same reason -- but the reason is now stateable. Two steps of
+the nitrogen recipe are skipped rather than one unexplained factor applied: no
+combining rule with the gas, and no `convr`. That is a sharper argument for the
+warning than the one it replaces, and it survives Iain's reply, which is about
+nitrogen throughout and does not mention helium.
+
+**Every per-row provenance comment in `mobcal_N2.f`'s table was about the other
+file.** "from fitting C60 mobility", the six-line Viehland note on sodium, "from
+fitting mobilities of small silicon clusters", every "(same as carbon)" and
+"(same as silicon)" -- all correct in `mobcal_He.f`, all copied across when the
+nitrogen table was written, all describing nothing once the row underneath was a
+scaled UFF value. This is the same defect class as chunk 3's silicon: a comment
+that outlived the number it described. Each now names the factor; the Viehland
+paragraph is kept verbatim and attributed. In `mobcal_He.f` only fluorine's was
+wrong -- it claims carbon and is a verbatim copy of oxygen.
+
+**`conve` is 0.382 % high, deliberately.** `conve=(4.2d0*0.01036427)` writes
+4.2 kJ per kcal for 4.184. Every nitrogen well depth is uniformly high by
+4.2/4.184 = 1.0038241 as a result, and so were the fits that produced the
+scaling factors. It belongs on the same list as the single-precision literals:
+things that look like defects, are, and must not be repaired.
+
+Two things chunk 8 deliberately did not do. It did not put `convr` on the helium
+halogen radii -- that would invent a parameterization nobody published and move
+published numbers. And it did not correct the four-significant-figure integer
+masses, format 604's `1pd`, or `conve`; each needs its own regeneration and none
+is settled by this reply.
+
+One note for a future grep. `0.8602` still appears in five files, in every case
+withdrawing the claim rather than making it. The check is not that the string is
+absent; it is that nothing still asserts it as the factor.
 
 ## The two array bounds
 

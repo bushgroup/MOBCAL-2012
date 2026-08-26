@@ -737,16 +737,53 @@ c
 c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
 c     are reached through COMMON, as they were before.
 c
+c     EVERY ROW IN THIS TABLE IS UFF.  Each is Rappe's universal force
+c     field x_I and D_I (ref 4) times one per-element scaling factor,
+c     combined with the gas by the geometric-mean rule below:
+c
+c         eolj = sqrt(eogas * f*D_I) * conve * xe
+c         rolj = sqrt(rogas * f*x_I) * convr * 1.0d-10
+c
+c     The factors are 0.43 for hydrogen, 1.20 for nitrogen, 0.93 for
+c     carbon, oxygen, fluorine, chlorine, bromine, iodine, potassium
+c     and caesium, and 1.00 -- unscaled UFF -- for lithium, sodium,
+c     silicon, phosphorus, sulfur and iron.  Verified: every literal
+c     below reproduces f*D_I and f*x_I to five significant figures,
+c     the residual being the rounding of these four-decimal literals
+c     (potassium: 0.035*0.93 = 0.03255, written 0.0326).  Provenance
+c     is refs 1, 5 and 6.  docs/parameters.md has the full table.
+c
+c     THE PER-ROW PROVENANCE COMMENTS BELOW WERE NOT ABOUT THIS TABLE.
+c     "from fitting C60 mobility", the Viehland note on sodium, "from
+c     fitting mobilities of small silicon clusters", and every "(same
+c     as carbon)" and "(same as silicon)", describe the HELIUM pair
+c     parameters in mobcal_He.f; they were carried across when this
+c     table was written and say nothing true about a UFF row.  v1.1
+c     replaced each with the factor actually applied, keeping the
+c     original wording where it recorded something worth keeping.  The
+c     helium file still carries the originals, where they are correct.
+c
+c     eogas and rogas are unscaled UFF nitrogen (0.069, 3.660), so the
+c     buffer gas takes factor 1.00 while the ion's own nitrogen atoms
+c     take 1.20.  That asymmetry is in the fitted parameterization, not
+c     an oversight here.
+c
+c     conve is an approximate kcal/mol-to-eV conversion: it writes 4.2
+c     kJ/kcal where the exact figure is 4.184, so every well depth in
+c     this table is uniformly high by 4.2/4.184 = 1.0038241, or
+c     0.382 %.  DO NOT CORRECT IT.  It is inside every nitrogen result
+c     this code has published.  convr is 2**(-1/6), converting the UFF
+c     r_min to a Lennard-Jones sigma, which is what rolj is: the
+c     potential is 4*eps*(sigma^12/r^12 - sigma^6/r^6).
+c
 c     v1.1 chunk 4 added chlorine, bromine, iodine, lithium, potassium
-c     and caesium, fitted the same way as the other X-X self
-c     parameters here (not transformed, unlike the He table's
-c     chlorine/bromine/iodine, so they carry no PROVISIONAL warning).
-c     All six, like every new element in this merge, borrow carbon's
-c     2.7 Angstrom hard-sphere radius rather than carrying a fitted
-c     one; that prints a warning (format 604).  It does not fire for
-c     the ten legacy elements, even though three of those already
-c     carry the same 2.7 Angstrom value under their own "(same as
-c     carbon)" comments.
+c     and caesium, by the same recipe as every other row here -- so
+c     unlike the He table's chlorine/bromine/iodine they carry no
+c     PROVISIONAL warning.  All six do borrow carbon's 2.7 Angstrom
+c     hard-sphere radius rather than carrying a fitted one; that prints
+c     a warning (format 604).  It does not fire for the ten legacy
+c     elements, even though three of those already carry the same
+c     2.7 Angstrom value.
 c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
@@ -766,8 +803,9 @@ c
       do 2020 iatom=1,inatom
       itest=0
 c             
-c     hydrogen (average value of eo from ab initio calculations
-c     and ro from fitting mobilities of C6H6 and others) 
+c     hydrogen (UFF x 0.43).  The "average value of eo from ab initio
+c     calculations and ro from fitting mobilities of C6H6 and others"
+c     that stood here is mobcal_He.f's provenance, not this row's.
 
       if(imass(iatom).eq.1) then
       itest=1
@@ -777,7 +815,7 @@ c     and ro from fitting mobilities of C6H6 and others)
       rhs(iatom)=2.2d0*1.0d-10
       endif
 c
-c     carbon (from fitting C60 mobility)
+c     carbon (UFF x 0.93; the C60-mobility fit is mobcal_He.f's)
 c
       if(imass(iatom).eq.12) then
       itest=1
@@ -789,7 +827,8 @@ c      rolj(iatom)=3.85949064*0.890898718*1.0d-10
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c
-c     nitrogen (same as carbon)
+c     nitrogen (UFF x 1.20 -- the gas itself uses unscaled UFF
+c     nitrogen, eogas/rogas above)
 c
       if(imass(iatom).eq.14) then
       itest=1
@@ -801,7 +840,7 @@ c      rolj(iatom)=3.762562956*0.890898718*1.0d-10
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c     
-c     oxygen (same as carbon)
+c     oxygen (UFF x 0.93)
 c
       if(imass(iatom).eq.16) then
       itest=1
@@ -813,12 +852,17 @@ c      rolj(iatom)=3.679402125*0.890898718*1.0d-10
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c
-c     sodium - Na+ from fitting potential derived by Viehland 
-c     (Chem. Phys. 85 (1984) 291) for Na+ + He interactions from mobility
-c     data. Note 12-6-4 doesn't provide a very good fit to Viehland's 
-c     potential. Viehland's potential is flatter at small r. We didn't
-c     include Viehland's first three points in the fit.
-c     Hard sphere radius from fitting 300 K Na+ low field mobility in He.
+c     sodium (UFF x 1.00, unscaled -- it pre-existed the scaling
+c     factors and was not re-optimized when they were fitted)
+c
+c     The Viehland provenance carried here from mobcal_He.f describes
+c     that file's He-Na+ row, not this one.  Kept for the record:
+c        Na+ from fitting potential derived by Viehland (Chem. Phys. 85
+c        (1984) 291) for Na+ + He interactions from mobility data. Note
+c        12-6-4 doesn't provide a very good fit to Viehland's potential.
+c        Viehland's potential is flatter at small r. We didn't include
+c        Viehland's first three points in the fit.  Hard sphere radius
+c        from fitting 300 K Na+ low field mobility in He.
 c
       if(imass(iatom).eq.23) then
       itest=1
@@ -828,7 +872,9 @@ c
       rhs(iatom)=2.853d0*1.0d-10
       endif
 c
-c     silicon (from fitting mobilities of small silicon clusters)
+c     silicon (UFF x 1.00, unscaled.  This is the row v1.1 adopted;
+c     NCOORD's copy held UFF IRON, 0.0130/2.9120, verbatim.  The
+c     silicon-cluster fit is mobcal_He.f's provenance, not this row's)
 c
       if(imass(iatom).eq.28) then
       itest=1
@@ -838,7 +884,7 @@ c
       rhs(iatom)=2.95d0*1.0d-10
       endif
 c
-c     sulfur (same as silicon)
+c     sulfur (UFF x 1.00, unscaled)
 c
       if(imass(iatom).eq.32) then
       itest=1
@@ -850,7 +896,7 @@ c      rolj(iatom)=3.950617673*0.890898718*1.0d-10
       rhs(iatom)=3.5d0*1.0d-10
       endif
 c
-c     iron (same as silicon)
+c     iron (UFF x 1.00, unscaled)
 c
       if(imass(iatom).eq.56) then
       itest=1
@@ -860,7 +906,7 @@ c
       rhs(iatom)=3.5d0*1.0d-10
       endif
 c
-c     Phosphorous
+c     Phosphorous (UFF x 1.00, unscaled)
 c
       if(imass(iatom).eq.31) then
       itest=1
@@ -870,7 +916,7 @@ c
       rhs(iatom)=4.2d0*1.0d-10
       endif
 c
-c     Flourine
+c     Flourine (UFF x 0.93)
 c
       if(imass(iatom).eq.19) then
       itest=1
@@ -880,7 +926,7 @@ c
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c
-c     chlorine
+c     chlorine (UFF x 0.93)
 c
       if(imass(iatom).eq.35) then
       itest=1
@@ -891,7 +937,7 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     iodine
+c     iodine (UFF x 0.93)
 c
       if(imass(iatom).eq.127) then
       itest=1
@@ -902,7 +948,7 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     bromine
+c     bromine (UFF x 0.93)
 c
       if(imass(iatom).eq.80) then
       itest=1
@@ -913,7 +959,7 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     lithium
+c     lithium (UFF x 1.00, unscaled -- no factor was fitted for it)
 c
       if(imass(iatom).eq.7) then
       itest=1
@@ -924,7 +970,7 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     potassium
+c     potassium (UFF x 0.93)
 c
       if(imass(iatom).eq.39) then
       itest=1
@@ -935,7 +981,7 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     caesium
+c     caesium (UFF x 0.93)
 c
       if(imass(iatom).eq.133) then
       itest=1

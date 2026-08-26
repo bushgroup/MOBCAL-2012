@@ -17,10 +17,20 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   `mobcal_N2.f` 16.
 + **Two warnings**, printed into the output file whenever an atom actually uses
   the parameter in question. One names a *provisional* Lennard-Jones parameter:
-  the three helium halogens were transformed from the nitrogen table by a single
-  factor rather than fitted to helium mobility data. The other names a *borrowed*
-  hard-sphere radius: all six new elements carry carbon's 2.7 Å, which for iodine
-  is smaller than its own Lennard-Jones σ.
+  the three helium halogens are the universal force field scaled by 0.80 and
+  used directly as helium-X pair parameters, without the combining rule or the
+  r_min-to-σ conversion the nitrogen table applies to the same numbers, and on a
+  factor no published source attests. The other names a *borrowed* hard-sphere
+  radius: all six new elements carry carbon's 2.7 Å, which for iodine is smaller
+  than its own Lennard-Jones σ.
++ **`docs/parameters.md`**, which derives every parameter in both element tables.
+  `mobcal_N2.f`'s table turns out to be Rappé's UFF throughout — all 32 literals
+  reproduce `x_I` and `D_I` times one factor per element (0.93 / 1.20 / 0.43 /
+  1.00) to five significant figures. That independently confirms which silicon
+  row was the right one to keep, corrects the "0.8602" this repository gave for
+  the helium halogens (the factor is 0.80 against UFF; 0.80/0.93 = 0.8602), and
+  records that `conve` writes 4.2 kJ/kcal for 4.184 — 0.382 % high, baked into
+  every published nitrogen result, and not to be corrected.
 + **A version banner.** Every output file now opens with the build that wrote it
   and the version of the element table it used, and the SUMMARY repeats both —
   `MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0`. Code version and parameter-set
@@ -74,6 +84,15 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   at that script rather than at `diff`.
 + **One element table per source file.** Each of `fcoord` and `ncoord` carried
   its own copy; both now call one `ljparm` subroutine.
++ **Every per-row provenance comment in `mobcal_N2.f`'s element table.** "from
+  fitting C60 mobility", the Viehland note on sodium, "from fitting mobilities of
+  small silicon clusters" and each "(same as carbon)" / "(same as silicon)" were
+  copied from `mobcal_He.f` when the nitrogen table was written, and describe
+  helium pair parameters rather than the UFF rows they sat above. Each now names
+  the scaling factor actually applied; the wording worth keeping, including
+  Viehland, is kept and attributed to the file it belongs to. `mobcal_He.f` keeps
+  its originals, where they are correct — except fluorine, whose "(same as
+  carbon)" row is a verbatim copy of oxygen.
 + **The reference outputs under `sample-output/`** were regenerated, once, for
   the two output changes below. Every other line of both files still carries the
   numbers published with the 2012 paper.

@@ -730,16 +730,34 @@ c
 c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
 c     are reached through COMMON, as they were before.
 c
-c     v1.1 chunk 4 added chlorine, bromine and iodine, transformed from
-c     mobcal_N2.f's self parameters by a single factor (0.8602, both
-c     epsilon and sigma) rather than fitted independently to He
-c     mobility data -- so each prints a PROVISIONAL warning (format
-c     603) when used.  All three, like every new element in this
-c     merge, borrow carbon's 2.7 Angstrom hard-sphere radius rather
-c     than carrying a fitted one; that prints its own warning (format
-c     604).  Neither warning fires for the nine legacy elements, even
-c     though three of those already carry the same 2.7 Angstrom value
-c     under their own "(same as carbon)" comments.
+c     This table holds He-X PAIR parameters directly.  rolj is the
+c     Lennard-Jones sigma used by 4*eps*(sigma^12/r^12 - sigma^6/r^6),
+c     and there is no combining rule with the gas.  The nine legacy
+c     rows are fits to helium mobility data; their per-row provenance
+c     comments are the originals and are correct here, unlike the
+c     copies of them that were carried into mobcal_N2.f.
+c
+c     v1.1 chunk 4 added chlorine, bromine and iodine.  These three are
+c     NOT helium fits.  Each is Rappe's UFF x_I and D_I (ref 4) scaled
+c     by 0.80 -- sigma exact to six digits, epsilon to the five figures
+c     written here at 43.360 meV per kcal/mol -- and inserted directly
+c     as a He-X pair parameter.  Two steps mobcal_N2.f applies to the
+c     same UFF numbers are skipped: the geometric-mean combining rule
+c     with the gas, and the r_min-to-sigma factor 2**(-1/6) it applies
+c     as convr.  And the 0.80 is attested in none of the papers cited
+c     for these parameters -- refs 1, 5 and 6 are nitrogen studies.
+c     So each of the three prints a PROVISIONAL warning (format 603)
+c     when used.  docs/parameters.md has the arithmetic.
+c
+c     (This file said 0.8602 through v1.1 chunk 4, having compared
+c     these rows against mobcal_N2.f's literals, which are themselves
+c     already scaled by 0.93.  0.80/0.93 = 0.8602.)
+c
+c     All three also borrow carbon's 2.7 Angstrom hard-sphere radius
+c     rather than carrying a fitted one; that prints its own warning
+c     (format 604).  Neither warning fires for the nine legacy
+c     elements, even though three of those already carry the same
+c     2.7 Angstrom value under their own "(same as carbon)" comments.
 c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
@@ -839,7 +857,8 @@ c
       rhs(iatom)=3.5d0*1.0d-10
       endif
 c
-c     fluorine (same as carbon)
+c     fluorine (a verbatim copy of oxygen's row above, not carbon's;
+c     the 2.7 Angstrom hard-sphere radius is carbon's)
 c
       if(imass(iatom).eq.19) then
       itest=1
@@ -849,7 +868,8 @@ c
       rhs(iatom)=2.7d0*1.0d-10
       endif
 c
-c     chlorine (same as carbon; PROVISIONAL, see README)
+c     chlorine (UFF x 0.80; hard-sphere radius same as carbon;
+c     PROVISIONAL -- see the note above and docs/parameters.md)
 c
       if(imass(iatom).eq.35) then
       itest=1
@@ -861,7 +881,8 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     iodine (same as carbon; PROVISIONAL, see README)
+c     iodine (UFF x 0.80; hard-sphere radius same as carbon;
+c     PROVISIONAL -- see the note above and docs/parameters.md)
 c
       if(imass(iatom).eq.127) then
       itest=1
@@ -873,7 +894,8 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
-c     bromine (same as carbon; PROVISIONAL, see README)
+c     bromine (UFF x 0.80; hard-sphere radius same as carbon;
+c     PROVISIONAL -- see the note above and docs/parameters.md)
 c
       if(imass(iatom).eq.80) then
       itest=1

@@ -6,10 +6,15 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 
 ### Any research that uses this code or the included Lennard-Jones parameters should reference [1].  
 
+[1] remains the citation for the code and for the original element table. A run that uses one of the elements added in v1.1 additionally rests on [4], the force field every `mobcal_N2.f` row is derived from, and on [5] for the halogens or [6] for the alkali metals. `docs/parameters.md` gives the derivation of every parameter in both tables.
+
 ### References
 1. Campuzano, I. D. G.;* Bush, M. F.;* Robinson, C. V.; Beaumont, C.; Richardson, K.; Kim, H.; Kim, H. I. “Structural Characterization of Drug-like Compounds by Ion Mobility Mass Spectrometry: Comparison of Theoretical and Experimentally Derived Nitrogen Collision Cross-sections.” <i>Anal. Chem.</i> <b>2012</b>, <i>84</i>, 1026-1033.
 2. Mesleh, M. F.; Hunter, J. M.; Shvartsburg, A. A.; Schatz, G. C.; Jarrold, M. F. “Structural Information from Ion Mobility Measurements: Effects of the Long Range Potential." <i>J. Phys. Chem.</i> <b>1996</b>, <i>100</i>, 16082-16086.
 3. Kim, H; Kim, H. I.; Johnson, P. V.; Beegle, L. W.; Beauchamp J.L.; Goddard, W.A.; Kanik, I. “Experimental and theoretical investigation into the correlation between mass and ion mobility for choline and other ammonium cations in N2.” <i>Anal. Chem.</i> <b>2008</b>, <i>80</i>, 1928-1936.
+4. Rappé, A. K.; Casewit, C. J.; Colwell, K. S.; Goddard, W. A., III; Skiff, W. M. “UFF, a Full Periodic Table Force Field for Molecular Mechanics and Molecular Dynamics Simulations.” <i>J. Am. Chem. Soc.</i> <b>1992</b>, <i>114</i>, 10024-10035.
+5. Lalli, P. M.; Corilo, Y. E.; Fasciotti, M.; Riccio, M. F.; de Sa, G. F.; Daroda, R. J.; Souza, G. H. M. F.; McCullagh, M.; Bartberger, M. D.; Eberlin, M. N.; Campuzano, I. D. G. “Baseline resolution of isomers by traveling wave ion mobility mass spectrometry: investigating the effects of polarizable drift gases and ionic charge distribution.” <i>J. Mass Spectrom.</i> <b>2013</b>, <i>48</i>, 989-997.
+6. Flick, T. G.; Campuzano, I. D. G.; Bartberger, M. D. “Structural Resolution of 4-Substituted Proline Diastereomers with Ion Mobility Spectrometry via Alkali Metal Ion Cationization.” <i>Anal. Chem.</i> <b>2015</b>, <i>87</i>, 3300-3307.
 
 ## Files
 
@@ -26,6 +31,7 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 ### Documentation
 + `docs/getting-started.md` An in-repository refresh of the original emailed guide, `N2_Mobcal_Getting_Started.pdf`
 + `docs/mfj-format.md` The `.mfj` input format precisely: every line, the element-key convention, and the charge-mode differences between the two gases
++ `docs/parameters.md` Where every Lennard-Jones and hard-sphere parameter in both tables came from, with the arithmetic to re-derive each one
 + `tools/xyz2mfj.py` Optional, dependency-free converter from plain XYZ coordinates to a `.mfj` file. Not part of the build and not covered by the three gates
 
 The two files under `sample-output/` are also the fixtures the regression gate
@@ -355,14 +361,23 @@ The parameter set is the version each output file's banner names. Set 1.0 is the
 table published with [1]: nine elements in helium, ten in nitrogen. Set 2.0 is
 this release's — the new elements below, and in nitrogen the silicon correction.
 
+Every row of `mobcal_N2.f`'s table is Rappé's universal force field [4]
+scaled by one factor per element -- 0.93 for carbon, oxygen, fluorine and the
+halogens, 1.20 for nitrogen, 0.43 for hydrogen, 1.00 for the rest -- fitted to
+reproduce experimental nitrogen cross sections [1, 5, 6]. That covers the six
+elements added in v1.1 as well as the ten that came before, so none of them
+carries a provisional warning.
+
 Chlorine (35), bromine (80) and iodine (127) in **helium** are
-**provisional**: they were transformed from `mobcal_N2.f`'s X-X self
-parameters by a single factor (0.8602, in both the Lennard-Jones well depth
-and radius) rather than independently fitted to helium mobility data. A run
-that uses one of them prints a warning naming the atom. The same three
-elements in **nitrogen**, and lithium (7), potassium (39) and caesium (133)
-in nitrogen, are fitted the same way as every other row in that table and
-carry no such warning.
+**provisional**, and print a warning naming the atom whenever one is used.
+They are the same force field scaled by 0.80, but inserted directly as
+helium-X pair parameters: the combining rule with the gas that `mobcal_N2.f`
+applies is absent, so is the r_min-to-sigma conversion it applies as `convr`,
+and the 0.80 factor is attested in none of [1], [5] or [6] -- all three are
+nitrogen studies. That does not make them wrong; it makes them unverified in
+the gas they are used in. `docs/parameters.md` has the arithmetic and shows
+why the figure of 0.8602 this file gave through v1.1 was an artifact of
+comparing against already-scaled nitrogen literals.
 
 All six of these new elements -- in whichever gas they appear -- borrow
 carbon's 2.7 Angstrom hard-sphere radius rather than a fitted one, which
@@ -377,9 +392,10 @@ the underlying parameterization rather than an oversight in the code, and an
 input with phosphorus in helium is refused rather than given a guessed
 value.
 
-`CLAUDE.md`'s *The one element table* has the file-and-line detail, and
-`test/new-elements-he.mfj` / `test/new-elements-n2.mfj` are what
-`test/elements.sh` runs both warnings against.
+`docs/parameters.md` derives every parameter in both tables from its
+source. `CLAUDE.md`'s *The one element table* has the file-and-line
+detail, and `test/new-elements-he.mfj` / `test/new-elements-n2.mfj` are
+what `test/elements.sh` runs both warnings against.
 
 ### Size limits
 

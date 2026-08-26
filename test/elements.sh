@@ -73,10 +73,16 @@
 # Two further things chunk 4 introduced are not observable from parameter
 # identity, so they get their own checks:
 #
-# - The three He halogens are PROVISIONAL (transformed from mobcal_N2.f's self
-#   parameters by one factor, 0.8602 in both epsilon and sigma, rather than
-#   independently fitted to He mobility data), and LJPARM prints a warning
-#   naming the atom whenever one is actually used. All six new elements across
+# - The three He halogens are PROVISIONAL -- UFF x_I and D_I scaled by 0.80 and
+#   inserted directly as He-X pair parameters, skipping both the combining rule
+#   with the gas and the r_min-to-sigma factor that mobcal_N2.f applies as
+#   convr, on a factor no published source attests -- and LJPARM prints a
+#   warning naming the atom whenever one is actually used. (Through chunk 4
+#   this comment said the factor was 0.8602 against mobcal_N2.f's literals.
+#   Those literals are themselves 0.93-scaled UFF; 0.80/0.93 = 0.8602. The
+#   assertions below never depended on the number, only on the warning firing
+#   the right number of times, which is why correcting it moved no test.)
+#   All six new elements across
 #   both files borrow carbon's 2.7 Angstrom hard-sphere radius rather than a
 #   fitted one, which prints a second warning. Both warnings are counted
 #   exactly (3 provisional atoms x 2 coordinate sets = 6 for He, and so on) --

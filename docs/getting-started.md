@@ -96,7 +96,9 @@ common case.
 ## References
 
 Any research that uses this code or the included Lennard-Jones parameters
-should cite [1].
+should cite [1]. A run using one of the elements added in v1.1 additionally
+rests on [4], the force field `mobcal_N2.f`'s table is derived from, and on
+[5] for the halogens or [6] for the alkali metals -- see `docs/parameters.md`.
 
 1. Campuzano, I. D. G.;\* Bush, M. F.;\* Robinson, C. V.; Beaumont, C.;
    Richardson, K.; Kim, H.; Kim, H. I. "Structural Characterization of
@@ -110,3 +112,17 @@ should cite [1].
    Goddard, W. A.; Kanik, I. "Experimental and theoretical investigation into
    the correlation between mass and ion mobility for choline and other
    ammonium cations in N2." *Anal. Chem.* **2008**, *80*, 1928-1936.
+4. Rappé, A. K.; Casewit, C. J.; Colwell, K. S.; Goddard, W. A., III;
+   Skiff, W. M. "UFF, a Full Periodic Table Force Field for Molecular
+   Mechanics and Molecular Dynamics Simulations." *J. Am. Chem. Soc.*
+   **1992**, *114*, 10024-10035.
+5. Lalli, P. M.; Corilo, Y. E.; Fasciotti, M.; Riccio, M. F.; de Sa, G. F.;
+   Daroda, R. J.; Souza, G. H. M. F.; McCullagh, M.; Bartberger, M. D.;
+   Eberlin, M. N.; Campuzano, I. D. G. "Baseline resolution of isomers by
+   traveling wave ion mobility mass spectrometry: investigating the effects
+   of polarizable drift gases and ionic charge distribution."
+   *J. Mass Spectrom.* **2013**, *48*, 989-997.
+6. Flick, T. G.; Campuzano, I. D. G.; Bartberger, M. D. "Structural
+   Resolution of 4-Substituted Proline Diastereomers with Ion Mobility
+   Spectrometry via Alkali Metal Ion Cationization." *Anal. Chem.*
+   **2015**, *87*, 3300-3307.

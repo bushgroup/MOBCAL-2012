@@ -198,6 +198,9 @@ refused by name; see *Size limits* in `README.md`.
 
 + `README.md`'s *Supported elements* — the keys each gas's table defines,
   and which of the new v1.1 elements are provisional.
++ `docs/parameters.md` — where the Lennard-Jones and hard-sphere
+  parameters behind each of those keys came from, and the arithmetic to
+  re-derive them.
 + `docs/getting-started.md` — the short original guide this format
   description grew out of.
 + `tools/xyz2mfj.py` — an optional, dependency-free converter from plain XYZ
