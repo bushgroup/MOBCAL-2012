@@ -23,6 +23,11 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 + `sample-output/Choline_He.out` Output file for choline in He gas
 + `sample-output/Choline_N2.out` Output file for choline in N2 gas
 
+### Documentation
++ `docs/getting-started.md` An in-repository refresh of the original emailed guide, `N2_Mobcal_Getting_Started.pdf`
++ `docs/mfj-format.md` The `.mfj` input format precisely: every line, the element-key convention, and the charge-mode differences between the two gases
++ `tools/xyz2mfj.py` Optional, dependency-free converter from plain XYZ coordinates to a `.mfj` file. Not part of the build and not covered by the three gates
+
 The two files under `sample-output/` are also the fixtures the regression gate
 compares against, so they are reference data and not just examples. They are the
 files published with [1], regenerated in v1.1 for the two output changes that
@@ -289,6 +294,17 @@ and corrected silicon in nitrogen only — so a table that did not change does n
 get a bump. Through v1.0 the SUMMARY instead read `program version = junkn.f`,
 identical in both sources, which named a scratch file rather than a version and
 could not distinguish a helium run from a nitrogen one.
+
+## Preparing input files
+
+`docs/mfj-format.md` documents the `.mfj` format precisely -- the label,
+coordinate-set and atom counts, units, the three charge modes, and the
+element-key convention -- including two things that are easy to get wrong: the
+mass column is a lookup key rather than the mass actually used, and `equal`
+charge mode does not mean quite the same total charge in `mobcal_N2.f` as it
+does in `mobcal_He.f`. `docs/getting-started.md` is a short in-repository
+refresh of the original emailed guide. `tools/xyz2mfj.py` converts plain XYZ
+coordinates to a `.mfj` file, optionally.
 
 ## Limitations
 + This method has been validated for drug-like small molecular ions in low pressure, ambient temperature He and N2 mobility experiment [1].  

@@ -35,6 +35,19 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   `test/bounds.sh` (the refusals), `test/elements.sh` (the parameter table) — run
   on Linux, macOS and Windows, one job per platform and gas.
 + **`mobcal_limits.inc`** and **`mobcal_version.inc`**, both required to compile.
++ **`docs/mfj-format.md`**, a precise description of the `.mfj` input format,
+  including that the mass column is a lookup key rather than the mass
+  actually used (so a specific isotope can't be represented), and that
+  `mobcal_N2.f`'s `equal` charge mode sums the (otherwise unused-by-helium)
+  charge column into the total charge, while `mobcal_He.f`'s ignores it —
+  a 5-column file with zero in that column silently zeroes the ion's charge
+  in nitrogen only.
++ **`docs/getting-started.md`**, an in-repository refresh of the guide
+  originally circulated as `N2_Mobcal_Getting_Started.pdf`, with the `g77`
+  compiling advice replaced by a pointer to the current build instructions.
++ **`tools/xyz2mfj.py`**, an optional, dependency-free converter from plain
+  XYZ coordinates (including multi-frame XYZ, for a conformer ensemble) to a
+  `.mfj` file. Not part of the build and not covered by the three gates.
 
 ### Changed
 
