@@ -61,11 +61,14 @@ gfortran -O3 -fno-automatic -std=legacy -o mN2 mobcal_N2.f
 
 reads `mobcal.in` from the current directory, which in turn names the
 `.mfj` input file, the output file, and the random-number seed. With the
-`mobcal.in` and `Choline.mfj` shipped in this repository, `mHe`'s output
-should match `sample-output/Choline_He.out` exactly, and `mN2`'s should match
-`sample-output/Choline_N2.out` — see *Checking your build* in `README.md`
-for the one-line cross-section values and the gate that checks the whole
-file.
+`mobcal.in` and `Choline.mfj` shipped in this repository, `mHe` reproduces
+every number in `sample-output/Choline_He.out` and `mN2` every number in
+`sample-output/Choline_N2.out`. Three lines still differ from a plain `diff`
+— the echoed input file name, which the 2012 references took from a file
+called `Choline_pop.mfj`, and two formatting spellings — so check with `sh
+test/regression.sh`, which accounts for all three. *Run the compiled code*
+and *Checking your build* in `README.md` have the detail and the one-line
+cross-section values.
 
 ## Preparing your own input
 

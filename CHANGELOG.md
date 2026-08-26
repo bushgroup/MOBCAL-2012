@@ -3,7 +3,7 @@
 All notable changes to MOBCAL-2012. Versions are two-component, matching the
 repository's tags; `v2.0` is reserved for the first breaking change.
 
-## [1.1] — unreleased
+## [1.1] — 2026-08-25
 
 The physics is untouched. Every cross section this release computes for an input
 that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
@@ -60,6 +60,18 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   states the `nint(atomic weight)` key convention, and lists the keys the build
   defines. Its format was `i3`, which printed a wrong atom number above atom 999
   — inside this build's own 1,000-atom bound.
++ **What the documentation promises a fresh run will reproduce.** Three pages
+  said an unmodified `mobcal.in` gives output "exactly the same" as the
+  committed reference — `README.md`'s *Run the compiled code*, which also named
+  a binary (`./mn`) no build command in the file produces and an output file
+  (`temp.out`) the shipped `mobcal.in` does not write, plus
+  `docs/getting-started.md` and `sample-output/README.md`. Measured from a clean
+  clone, a fresh run reproduces every *number*, and three lines still differ
+  from a plain `diff`: the echoed input file name, which the references took
+  from a file called `Choline_pop.mfj`; the `D`-versus-`E` exponent letter; and
+  the line terminator on Windows. None is physics, and `test/regression.sh`
+  accounts for all three — which is why all three pages now name them and point
+  at that script rather than at `diff`.
 + **One element table per source file.** Each of `fcoord` and `ncoord` carried
   its own copy; both now call one `ljparm` subroutine.
 + **The reference outputs under `sample-output/`** were regenerated, once, for

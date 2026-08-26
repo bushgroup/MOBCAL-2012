@@ -276,8 +276,37 @@ provenance, not as a requirement: the `sample-output/` files still carry its
 numbers line for line, and the v1.1 regeneration reproduced every one of them.
 
 ## Run the compiled code
-+ example: `./mn`  
-+ If you use the provided `mobcal.in` file, the resulting `temp.out` file should be <u>exactly</u> the same as the provided output file.  
+
+```sh
+./mHe
+```
+
+The program takes no arguments, and prints nothing to the console unless it
+refuses the input — everything else goes to the output file. It reads
+`mobcal.in` from the current directory, which names three things on three
+lines: the `.mfj` input file, the output file to write, and the random-number
+seed. The copy shipped here runs `Choline.mfj` at the seed the published output
+used, and writes `temp.choline.n2.out` — one name used by both gases, so a
+helium run and a nitrogen run in the same directory overwrite each other unless
+you change that second line.
+
+With `mobcal.in` unmodified, `./mHe` reproduces every number in
+`sample-output/Choline_He.out` and `./mN2` every number in
+`sample-output/Choline_N2.out`, down to the stochastic diagnostics and the
+standard deviation. Three lines nevertheless differ from a plain `diff`, and
+none of the three is physics:
+
++ **The echoed `input file name`.** The reference files were produced from a
+  file named `Choline_pop.mfj`; this repository ships the same coordinates as
+  `Choline.mfj`, so that field — and only that field — carries a different name,
+  twice.
++ **The exponent letter** on the `mass of ion` line, which g77 wrote `E` and
+  `gfortran` writes `D`.
++ **The line terminator**, on Windows only.
+
+`test/regression.sh` stages the input under the name the reference records and
+normalizes the other two before comparing, which is why *Checking your build*
+above recommends that script over `diff`. `CLAUDE.md` documents all three.
 
 ### Which version produced an output file
 

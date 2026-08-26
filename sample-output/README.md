@@ -1,6 +1,10 @@
 # Sample output
 
-If you use the provided `mobcal.in` file, the resulting `temp.out` file should be exactly the same as the provided output file.
+Running either binary with the provided `mobcal.in` reproduces every number in
+the corresponding file here. Three lines still differ from a plain `diff` — the
+echoed input file name, the `D`-versus-`E` exponent letter, and the line
+terminator on Windows — none of them physics; see *Run the compiled code* in
+`README.md`, and use `sh test/regression.sh`, which accounts for all three.
 
 These two files are also the fixtures `test/regression.sh` compares against, so
 they are reference data rather than examples. Two things follow from that.

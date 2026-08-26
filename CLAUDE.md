@@ -462,6 +462,19 @@ spelling and both rules still apply.
    nothing that merely rode along. It is now a change that costs a regeneration
    of its own.
 
+**A third difference is staged away rather than normalized.** Both references
+echo the name of the file they were run on, twice, and that name is
+`Choline_pop.mfj` — the 2012 run's. This repository ships the same coordinates
+as `Choline.mfj`. So `test/regression.sh` copies the input to the name it reads
+out of the reference before running, rather than editing either side of the
+comparison. The consequence is worth stating in the contributor notes because it
+surprises anyone checking a build by hand: a user who runs the shipped
+`mobcal.in` directly and diffs the result gets one differing field, twice, on
+top of the two rules above — and it is the echoed filename, not a number.
+Chunk 7 measured exactly that from a clean clone, and `README.md`'s *Run the
+compiled code* now names all three differences instead of promising an exact
+match.
+
 ## Building
 
 The recipe is `-O3 -fno-automatic -std=legacy`, plus `-static` on Windows. It
