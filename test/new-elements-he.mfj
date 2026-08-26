@@ -1,6 +1,6 @@
-new elements, two identical conformers (He): C,N,O,F legacy + Cl,Br,I new
+new elements, 2 identical conformers (He): C,N,O,F legacy + Cl,Br,I,P new
 2
-7
+8
 ang
 calc
 1.0000
@@ -11,6 +11,7 @@ calc
       4.00000      0.00000      0.00000  35       0.100000
       5.00000      0.00000      0.00000  80       0.100000
       6.00000      0.00000      0.00000 127       0.100000
+      7.00000      0.00000      0.00000  31       0.100000
 conformer 2 -- deliberately identical to conformer 1
       0.00000      0.00000      0.00000  12       0.100000
       1.00000      0.00000      0.00000  14       0.100000
@@ -19,3 +20,4 @@ conformer 2 -- deliberately identical to conformer 1
       4.00000      0.00000      0.00000  35       0.100000
       5.00000      0.00000      0.00000  80       0.100000
       6.00000      0.00000      0.00000 127       0.100000
+      7.00000      0.00000      0.00000  31       0.100000

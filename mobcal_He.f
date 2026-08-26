@@ -87,12 +87,15 @@ c
 c
 c     The version of the helium parameter table, versioned separately
 c     from the code because the helium and nitrogen tables are revised
-c     independently -- see mobcal_version.inc.  2.0 is the table
-c     as of v1.1: the nine elements published with Campuzano et al. 2012
-c     plus chlorine, bromine and iodine.
+c     independently -- see mobcal_version.inc.  2.0 was the nine
+c     elements published with Campuzano et al. 2012 plus chlorine,
+c     bromine and iodine; 2.1 adds phosphorus.  Both steps are pure
+c     additions -- no existing row's values have changed since 1.0 --
+c     which is why the second component moves rather than the first.
+c     mobcal_N2.f is at 2.0 and did not move for either.
 c
       character*(*) verparm
-      parameter (verparm='2.0')
+      parameter (verparm='2.1')
       dimension tmc(lcoord),tmm(lcoord),ehsc(lcoord),ehsm(lcoord),
      ?pac(lcoord),pam(lcoord),asympp(lcoord)
       character*30 filen1,filen2,unit,dchar,xlabel
@@ -737,27 +740,31 @@ c     rows are fits to helium mobility data; their per-row provenance
 c     comments are the originals and are correct here, unlike the
 c     copies of them that were carried into mobcal_N2.f.
 c
-c     v1.1 chunk 4 added chlorine, bromine and iodine.  These three are
-c     NOT helium fits.  Each is Rappe's UFF x_I and D_I (ref 4) scaled
-c     by 0.80 -- sigma exact to six digits, epsilon to the five figures
-c     written here at 43.360 meV per kcal/mol -- and inserted directly
-c     as a He-X pair parameter.  Two steps mobcal_N2.f applies to the
-c     same UFF numbers are skipped: the geometric-mean combining rule
-c     with the gas, and the r_min-to-sigma factor 2**(-1/6) it applies
-c     as convr.  And the 0.80 is attested in none of the papers cited
-c     for these parameters -- refs 1, 5 and 6 are nitrogen studies.
-c     So each of the three prints a PROVISIONAL warning (format 603)
-c     when used.  docs/parameters.md has the arithmetic.
+c     v1.1 added chlorine, bromine and iodine (chunk 4), then
+c     phosphorus (chunk 9).  These four are NOT helium fits.  Each is
+c     Rappe's UFF x_I and D_I (ref 4) scaled by 0.80 -- sigma exact to
+c     six digits, epsilon to the five figures written here at 43.360
+c     meV per kcal/mol -- and inserted directly as a He-X pair
+c     parameter.  Two steps mobcal_N2.f applies to the same UFF numbers
+c     are skipped: the geometric-mean combining rule with the gas, and
+c     the r_min-to-sigma factor 2**(-1/6) it applies as convr.  And the
+c     0.80 is attested in none of the papers cited for these parameters
+c     -- refs 1, 5 and 6 are nitrogen studies.  So each of the four
+c     prints a PROVISIONAL warning (format 603) when used.
+c     docs/parameters.md has the arithmetic.
 c
 c     (This file said 0.8602 through v1.1 chunk 4, having compared
 c     these rows against mobcal_N2.f's literals, which are themselves
 c     already scaled by 0.93.  0.80/0.93 = 0.8602.)
 c
-c     All three also borrow carbon's 2.7 Angstrom hard-sphere radius
-c     rather than carrying a fitted one; that prints its own warning
-c     (format 604).  Neither warning fires for the nine legacy
-c     elements, even though three of those already carry the same
-c     2.7 Angstrom value under their own "(same as carbon)" comments.
+c     The three halogens also borrow carbon's 2.7 Angstrom hard-sphere
+c     radius rather than carrying a fitted one; that prints its own
+c     warning (format 604).  Phosphorus does not -- its 4.2 Angstrom is
+c     its own.  So the two warnings do not fire on the same set of
+c     rows, which is what lets test/elements.sh tell them apart by
+c     count.  Neither fires for the nine legacy elements, even though
+c     three of those already carry the same 2.7 Angstrom value under
+c     their own "(same as carbon)" comments.
 c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
@@ -907,12 +914,31 @@ c
       write(8,604) iatom,imass(iatom)
       endif
 c
+c     phosphorus (UFF x 0.80, the same construction as chlorine,
+c     bromine and iodine above, so PROVISIONAL for the same reasons:
+c     eolj = 0.305*0.80*43.360 = 10.57984 meV, rolj = 4.147*0.80.
+c     Added in v1.1 after that construction was identified; before
+c     then phosphorus was defined in mobcal_N2.f only and refused
+c     here.  It does NOT print the borrowed-hard-sphere-radius
+c     warning: 4.2 Angstrom is phosphorus's own value, taken from
+c     mobcal_N2.f, where every element defined in both files carries
+c     the same rhs.)
+c
+      if(imass(iatom).eq.31) then
+      itest=1
+      xmass(iatom)=30.97d0
+      eolj(iatom)=10.580d-3*xe
+      rolj(iatom)=3.3176d0*1.0d-10
+      rhs(iatom)=4.2d0*1.0d-10
+      write(8,603) iatom,imass(iatom)
+      endif
+c
       if(itest.eq.0) then
       write(8,602) iatom,imass(iatom)
   602 format(1x,'type not defined for atom number',i4,
      ?' (mass key',i4,').'/
      ?1x,'element keys are nint(atomic weight); defined keys:'/
-     ?1x,'1,12,14,16,19,23,28,32,35,56,80,127')
+     ?1x,'1,12,14,16,19,23,28,31,32,35,56,80,127')
       close (8)
       stop
       endif

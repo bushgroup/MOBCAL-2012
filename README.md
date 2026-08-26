@@ -320,13 +320,14 @@ Every output file opens with a banner naming the build that wrote it and the
 version of the element table it used, and the SUMMARY at the end repeats both:
 
 ```
- MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0
+ MOBCAL 1.1 (mobcal_He.f), He parameter set 2.1
 ```
 
 The two are versioned separately because the helium and nitrogen tables are
-revised independently — v1.1 added three elements to helium and six to nitrogen,
-and corrected silicon in nitrogen only — so a table that did not change does not
-get a bump. Through v1.0 the SUMMARY instead read `program version = junkn.f`,
+revised independently, and in v1.1 they did: nitrogen took six new elements and
+the silicon correction and sits at 2.0, while helium took three new elements to
+reach 2.0 and then phosphorus to reach 2.1. A table that did not change does not
+get a bump, which is the whole point of not sharing one string. Through v1.0 the SUMMARY instead read `program version = junkn.f`,
 identical in both sources, which named a scratch file rather than a version and
 could not distinguish a helium run from a nitrogen one.
 
@@ -354,12 +355,15 @@ unrecognized key is refused, naming the atom, the key you gave, the
 
 | gas | parameter set | defined keys (`nint` of atomic weight) |
 |---|---|---|
-| He | 2.0 | 1, 12, 14, 16, 19, 23, 28, 32, 35, 56, 80, 127 |
+| He | 2.1 | 1, 12, 14, 16, 19, 23, 28, 31, 32, 35, 56, 80, 127 |
 | N2 | 2.0 | 1, 7, 12, 14, 16, 19, 23, 28, 31, 32, 35, 39, 56, 80, 127, 133 |
 
 The parameter set is the version each output file's banner names. Set 1.0 is the
-table published with [1]: nine elements in helium, ten in nitrogen. Set 2.0 is
-this release's — the new elements below, and in nitrogen the silicon correction.
+table published with [1]: nine elements in helium, ten in nitrogen. Nitrogen's
+set 2.0 is this release's — six new elements and the silicon correction. Helium
+went to 2.0 for three new elements and then to 2.1 for phosphorus; no existing
+row's values changed in either step. The two move independently, which is why
+they are two version strings and not one.
 
 Every row of `mobcal_N2.f`'s table is Rappé's universal force field [4]
 scaled by one factor per element -- 0.93 for carbon, oxygen, fluorine and the
@@ -368,8 +372,8 @@ reproduce experimental nitrogen cross sections [1, 5, 6]. That covers the six
 elements added in v1.1 as well as the ten that came before, so none of them
 carries a provisional warning.
 
-Chlorine (35), bromine (80) and iodine (127) in **helium** are
-**provisional**, and print a warning naming the atom whenever one is used.
+Chlorine (35), bromine (80), iodine (127) and phosphorus (31) in **helium**
+are **provisional**, and print a warning naming the atom whenever one is used.
 They are the same force field scaled by 0.80, but inserted directly as
 helium-X pair parameters: the combining rule with the gas that `mobcal_N2.f`
 applies is absent, so is the r_min-to-sigma conversion it applies as `convr`,
@@ -379,18 +383,26 @@ the gas they are used in. `docs/parameters.md` has the arithmetic and shows
 why the figure of 0.8602 this file gave through v1.1 was an artifact of
 comparing against already-scaled nitrogen literals.
 
-All six of these new elements -- in whichever gas they appear -- borrow
-carbon's 2.7 Angstrom hard-sphere radius rather than a fitted one, which
-also prints a warning naming the atom. The hard-sphere radius affects only
-the EHSS/PA calculation (`mobcal_N2.f` does not compute one at all), never
-the trajectory method that produces the published cross section. It matters
-most for iodine, whose helium Lennard-Jones radius (3.60 Angstrom) is
-already larger than the borrowed hard-sphere radius.
+Chlorine, bromine, iodine, lithium, potassium and caesium -- in whichever gas
+they appear -- borrow carbon's 2.7 Angstrom hard-sphere radius rather than a
+fitted one, which also prints a warning naming the atom. Helium's phosphorus,
+added in the same release, is the exception: its 4.2 Angstrom is phosphorus's
+own, so it prints the provisional warning and not this one. It is therefore
+the only row that prints one of the two and not the other, which is how
+`test/elements.sh` tells them apart by count.
 
-Phosphorus (31) is defined for nitrogen but not for helium. That is a gap in
-the underlying parameterization rather than an oversight in the code, and an
-input with phosphorus in helium is refused rather than given a guessed
-value.
+The hard-sphere radius affects only the EHSS/PA calculation (`mobcal_N2.f`
+does not compute one at all), never the trajectory method that produces the
+published cross section. It matters most for iodine, whose helium
+Lennard-Jones radius (3.60 Angstrom) is already larger than the borrowed
+hard-sphere radius.
+
+Phosphorus (31) was defined for nitrogen but not for helium until v1.1, on
+the grounds that a missing parameter should be refused rather than guessed.
+It is now defined in both, built by the same scaled-force-field construction
+as helium's three halogens, and it carries the same provisional warning. That
+construction rests on a factor no published source attests, so the row is
+offered as a construction and labelled as one -- not as a measurement.
 
 `docs/parameters.md` derives every parameter in both tables from its
 source. `CLAUDE.md`'s *The one element table* has the file-and-line

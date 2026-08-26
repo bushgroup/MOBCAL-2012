@@ -13,16 +13,27 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
 
 + **Six elements**, from Iain Campuzano's parameterizations: chlorine (35),
   bromine (80) and iodine (127) in both gases, plus lithium (7), potassium (39)
-  and caesium (133) in nitrogen. `mobcal_He.f` now defines 12 mass keys,
-  `mobcal_N2.f` 16.
+  and caesium (133) in nitrogen.
++ **Phosphorus (31) in helium**, which previously only nitrogen defined. It is
+  built by the same construction as helium's three halogens — the universal
+  force field scaled by 0.80 — so it applies a construction already in that
+  table rather than inventing a value, which is what had kept it out. It is
+  still an extrapolation. It carries the same *provisional* warning, and
+  the same caveat: the 0.80 factor is attested in no published source, so the
+  row is a construction rather than a measurement. Its hard-sphere radius is
+  phosphorus's own 4.2 Å from the nitrogen table, not carbon's borrowed 2.7 Å,
+  so it is the one row that prints one of the two warnings and not the other.
+  This took the **helium parameter set to 2.1**; nitrogen's stayed at 2.0.
+  `mobcal_He.f` now defines 13 mass keys, `mobcal_N2.f` 16.
 + **Two warnings**, printed into the output file whenever an atom actually uses
   the parameter in question. One names a *provisional* Lennard-Jones parameter:
-  the three helium halogens are the universal force field scaled by 0.80 and
-  used directly as helium-X pair parameters, without the combining rule or the
-  r_min-to-σ conversion the nitrogen table applies to the same numbers, and on a
-  factor no published source attests. The other names a *borrowed* hard-sphere
-  radius: all six new elements carry carbon's 2.7 Å, which for iodine is smaller
-  than its own Lennard-Jones σ.
+  helium's four newest rows — chlorine, bromine, iodine and phosphorus — are the
+  universal force field scaled by 0.80 and used directly as helium-X pair
+  parameters, without the combining rule or the r_min-to-σ conversion the
+  nitrogen table applies to the same numbers, and on a factor no published
+  source attests. The other names a *borrowed* hard-sphere radius: chlorine,
+  bromine, iodine, lithium, potassium and caesium carry carbon's 2.7 Å, which
+  for iodine is smaller than its own Lennard-Jones σ.
 + **`docs/parameters.md`**, which derives every parameter in both element tables.
   `mobcal_N2.f`'s table turns out to be Rappé's UFF throughout — all 32 literals
   reproduce `x_I` and `D_I` times one factor per element (0.93 / 1.20 / 0.43 /
@@ -33,9 +44,10 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   every published nitrogen result, and not to be corrected.
 + **A version banner.** Every output file now opens with the build that wrote it
   and the version of the element table it used, and the SUMMARY repeats both —
-  `MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0`. Code version and parameter-set
+  `MOBCAL 1.1 (mobcal_He.f), He parameter set 2.1`. Code version and parameter-set
   version are separate because the helium and nitrogen tables are revised
-  independently.
+  independently — which this release demonstrates: helium ends at 2.1 and
+  nitrogen at 2.0.
 + **Array-bound refusals.** An input declaring more than 1,000 atoms per
   conformer or more than 100 coordinate sets is refused with a message naming
   both the limit and the count given, and the program exits nonzero. Previously
@@ -93,8 +105,9 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   Viehland, is kept and attributed to the file it belongs to. `mobcal_He.f` keeps
   its originals, where they are correct — except fluorine, whose "(same as
   carbon)" row is a verbatim copy of oxygen.
-+ **The reference outputs under `sample-output/`** were regenerated, once, for
-  the two output changes below. Every other line of both files still carries the
++ **The reference outputs under `sample-output/`.** `Choline_He.out` was
+  regenerated twice and `Choline_N2.out` once, each time for a named output
+  change and nothing else. Every other line of both files still carries the
   numbers published with the 2012 paper.
 
 ### Fixed
@@ -114,9 +127,10 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
   a quarter of it. Nothing reads `q1st` back, so no cross section, standard
   deviation or mobility was ever affected.
 
-### The regenerated reference diff
+### The regenerated reference diffs
 
-`sample-output/` moved in exactly one commit. In `Choline_He.out`, 84 lines:
+`sample-output/` moved in exactly two commits, and both diffs were counted line
+by line. The first, in `Choline_He.out`, 84 lines:
 
 | lines | change |
 |---|---|
@@ -127,6 +141,18 @@ that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
 
 `Choline_N2.out` is the same four changes. No cross section, no standard
 deviation, no stochastic diagnostic and no geometry line moved in either file.
+
+The second, when phosphorus took the helium table to parameter set 2.1, is two
+lines and touches `Choline_He.out` only:
+
+| lines | change |
+|---|---|
+| −1 / +1 | the banner, `He parameter set 2.0` → `2.1` |
+| −1 / +1 | `He parameter set = 2.0` → `= 2.1`, in the SUMMARY |
+
+`Choline_N2.out` does not move: nitrogen's table did not change. Choline
+contains no phosphorus and no halogen, so neither element warning appears in
+either reference.
 
 ## [1.0] — 2012
 

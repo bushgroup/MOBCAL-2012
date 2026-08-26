@@ -1,4 +1,4 @@
- MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0
+ MOBCAL 1.1 (mobcal_He.f), He parameter set 2.1
  input file name = Choline_pop.mfj               
  input file label = Choline_631G++dp_pop          
  number of coordinate sets =    1
@@ -262,7 +262,7 @@
  SUMMARY
 
  program version = MOBCAL 1.1 (mobcal_He.f)
- He parameter set = 2.0
+ He parameter set = 2.1
  input file name = Choline_pop.mfj               
  input file label = Choline_631G++dp_pop          
  temperature = 3.0100E+02

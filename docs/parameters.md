@@ -6,7 +6,7 @@ editing hazards; this page is the provenance.
 
 The short version: **`mobcal_N2.f`'s table is UFF throughout**, and
 **`mobcal_He.f`'s is not** — its nine original rows are direct fits to helium
-mobility data, and the three added in v1.1 are UFF put through a different,
+mobility data, and the four added in v1.1 are UFF put through a different,
 undocumented transformation. That asymmetry is why the two tables are separate
 subroutines, separately versioned, and why only one of them prints a warning.
 
@@ -88,7 +88,7 @@ a Lennard-Jones σ.
 
 The single-precision literals are also load-bearing — see `CLAUDE.md`.
 
-## `mobcal_He.f`: nine helium fits, and three that are not
+## `mobcal_He.f`: nine helium fits, and four that are not
 
 The nine original rows are what their own comments say: hydrogen and carbon from
 mobility fits, sodium from Viehland's Na⁺–He potential, and so on. Nothing in
@@ -96,21 +96,24 @@ this section applies to them. (Those same comments were copied into
 `mobcal_N2.f` when its table was written, where they describe nothing; v1.1
 replaced them there with the factors above.)
 
-Chlorine, bromine and iodine, added in v1.1, are different. Each is UFF `x_I`
-and `D_I` scaled by **0.80** and inserted directly as a He–X pair parameter:
+Chlorine, bromine, iodine and phosphorus, added in v1.1, are different. Each is
+UFF `x_I` and `D_I` scaled by **0.80** and inserted directly as a He–X pair
+parameter:
 
 | key | element | ε in source | `0.80 · D_I · 43.360` | σ in source | `0.80 · x_I` |
 |---|---|---|---|---|---|
 | 35 | chlorine | `7.8742d-3` | 7.874176 | `3.1576` | 3.157600 |
 | 80 | bromine | `8.7067d-3` | 8.706688 | `3.3512` | 3.351200 |
 | 127 | iodine | `11.759d-3` | 11.759232 | `3.6000` | 3.600000 |
+| 31 | phosphorus | `10.580d-3` | 10.579840 | `3.3176` | 3.317600 |
 
-σ is exact to six digits in all three. ε matches to the five figures written,
-using one conversion constant — the factor each row implies is 43.36013,
-43.36006 and 43.35914 meV per kcal/mol, against an exact 43.36410, so the
-constant used was 43.360.
+σ is exact to six digits in all four. ε matches to the five figures written,
+using one conversion constant — the factor the three shipped halogen rows imply
+is 43.36013, 43.36006 and 43.35914 meV per kcal/mol, against an exact 43.36410,
+so the constant used was 43.360. Phosphorus was then built with that same
+43.360, which is why its row appears in this table rather than deriving it.
 
-**These three print a `PROVISIONAL` warning when used, for three reasons.**
+**These four print a `PROVISIONAL` warning when used, for three reasons.**
 
 1. They are X–X **self** parameters used as He–X **pair** parameters. The
    geometric-mean combining rule with the gas that `mobcal_N2.f` applies to the
@@ -125,6 +128,35 @@ constant used was 43.360.
 
 None of that makes them wrong — it makes them unverified in the gas they are
 used in. The warning says so in the output file, once per atom that uses one.
+
+### Phosphorus, added on that recipe
+
+Phosphorus (31) has been in `mobcal_N2.f` since 2015 and was refused by
+`mobcal_He.f` — there was no helium value and none was going to be guessed.
+Once the construction above was identified it stopped being a guess and became
+an application of the recipe the table's three newest rows already used, so
+v1.1 added it:
+
+```
+eolj = 0.305 × 0.80 × 43.360 = 10.57984  ->  10.580d-3*xe
+rolj = 4.147 × 0.80          =  3.3176   ->  3.3176d0*1.0d-10
+rhs  =                          4.2      ->  4.2d0*1.0d-10
+```
+
+It carries the `PROVISIONAL` warning for the same three reasons as the
+halogens, and the same caveat: **0.80 is undocumented, so this row is a
+construction, not a measurement.** It is offered because refusing an element
+the recipe covers serves nobody, not because it has been validated in helium —
+none of these four has been, unlike the nine rows above them.
+
+It does **not** carry the borrowed-hard-sphere-radius warning. Its 4.2 Å is
+phosphorus's own value from `mobcal_N2.f`, which is sound because `rhs` is
+gas-independent here — see below. That makes it the one row that trips one
+warning and not the other, which is what lets `test/elements.sh` tell the two
+apart by count rather than by presence.
+
+Adding it bumped the helium parameter set from 2.0 to 2.1. Nitrogen's stayed at
+2.0, which is the whole reason the two are versioned separately.
 
 ### An earlier claim, withdrawn
 
@@ -151,7 +183,7 @@ both files carries the same value in both.
 | 19 | fluorine | 2.7 | 2.7 |
 | 23 | sodium | 2.853 | 2.853 |
 | 28 | silicon | 2.95 | 2.95 |
-| 31 | phosphorus | — | 4.2 |
+| 31 | phosphorus | 4.2 | 4.2 |
 | 32 | sulfur | 3.5 | 3.5 |
 | 35 | chlorine | 2.7 | 2.7 |
 | 39 | potassium | 2.7 | 2.7 |
@@ -187,9 +219,10 @@ appear in the output at all.
 For nitrogen the recipe is settled: take UFF `x_I` and `D_I`, apply the factor
 for that element's class, write four decimals. For helium there is no settled
 recipe. The nine original rows came from fits nobody is repeating, and the 0.80
-factor the three newer rows use is undocumented. **A helium element this table
+factor the four newer rows use is undocumented. **A helium element this table
 does not define is refused, not guessed** — and a row added by extrapolating
-0.80 is provisional by construction, which is what the warning is for.
+0.80, as phosphorus was, is provisional by construction, which is what the
+warning is for.
 
 ## References
 

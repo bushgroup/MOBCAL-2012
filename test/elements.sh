@@ -359,7 +359,7 @@ for gas in $GASES; do
     case "$gas" in
         he) src=mobcal_He.f
             si_eps=1.35e-3 ; si_sig=3.5        ; si_rhs=2.95
-            itest_want=12 ; prov_want=6 ; borrow_want=6 ;;
+            itest_want=13 ; prov_want=8 ; borrow_want=6 ;;
         n2) src=mobcal_N2.f
             si_eps=7.249792567e-3 ; si_sig=3.532242086 ; si_rhs=2.95
             itest_want=16 ; prov_want=0 ; borrow_want=12 ;;
@@ -496,6 +496,12 @@ for gas in $GASES; do
                   "$(pin_atom "$DAT" 6 8.7067e-3  3.3512 2.7)"
             check "iodine   pinned to Iain's parameters" \
                   "$(pin_atom "$DAT" 7 11.759e-3  3.6000 2.7)"
+            # Phosphorus is chunk 9's, built by the same UFF x 0.80 recipe
+            # (0.305*0.80*43.360 = 10.57984 meV, 4.147*0.80 = 3.3176 A) but
+            # carrying its own 4.2 A hard-sphere radius rather than carbon's
+            # 2.7.  That is what makes the two warning counts below differ.
+            check "phosphorus pinned to the UFF x 0.80 construction" \
+                  "$(pin_atom "$DAT" 8 10.580e-3  3.3176 4.2)"
             ;;
         n2)
             check "chlorine  pinned to Iain's parameters" \
@@ -517,6 +523,21 @@ for gas in $GASES; do
     # all" would not distinguish the new elements from the legacy ones that
     # happen to share the same 2.7 Angstrom hard-sphere radius. Each of the
     # NCRD identical coordinate sets re-triggers every warning once.
+    #
+    # Since chunk 9 the two He counts DIFFER, and that is the point. Four rows
+    # are provisional (Cl, Br, I, P) but only three borrow carbon's radius --
+    # phosphorus's 4.2 Angstrom is its own. So the two warnings no longer fire
+    # on the same set of rows, and a mistake in either direction moves exactly
+    # one count: a new row that borrowed 2.7 without saying so raises
+    # borrow_want, and a row added on the 0.80 factor without the PROVISIONAL
+    # warning lowers prov_want. While the two sets coincided, neither error was
+    # visible here.
+    #
+    # Verified by mutation, both directions. Deleting phosphorus's write(8,603)
+    # takes prov_want 8 -> 6 and leaves borrow_want at 6; giving phosphorus
+    # carbon's 2.7 Angstrom and the matching write(8,604) takes borrow_want
+    # 6 -> 8, leaves prov_want at 8, and also trips the pin above. One failure
+    # each, on the count that should move.
     pc=$(grep -c 'WARNING: provisional'      "$d/ljprobe.out" || true)
     bc=$(grep -c 'borrowed from carbon'      "$d/ljprobe.out" || true)
     check "provisional-parameter warning fires exactly $prov_want time(s) (got $pc)" \

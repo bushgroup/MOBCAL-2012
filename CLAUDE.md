@@ -365,7 +365,10 @@ over-bound fixtures rather than committing them.
 
 Left alone, deliberately: phosphorus is still absent from helium (present in
 nitrogen since 2015) -- refused rather than guessed, on the same reasoning as
-silicon's fluorine/sulfur neighbours in chunk 3. The integer masses
+silicon's fluorine/sulfur neighbours in chunk 3. (Chunk 9 added it, once chunk
+8 had identified the construction the helium halogens use. The reasoning that
+kept it out here is still the reasoning that labels it provisional there.) The
+integer masses
 (chlorine 35.00 vs. 35.45, etc.), the `q1st` divisor, and the version strings
 are chunk 5's, not this one's -- taking any of them here would have meant
 regenerating `sample-output/` outside the one commit the plan reserves for
@@ -502,9 +505,62 @@ published numbers. And it did not correct the four-significant-figure integer
 masses, format 604's `1pd`, or `conve`; each needs its own regeneration and none
 is settled by this reply.
 
-One note for a future grep. `0.8602` still appears in five files, in every case
+One note for a future grep. `0.8602` still appears in six files, in every case
 withdrawing the claim rather than making it. The check is not that the string is
 absent; it is that nothing still asserts it as the factor.
+
+## Chunk 9 -- phosphorus in helium, and the He parameter set at 2.1
+
+One row, and the second of only two commits in v1.1 that move a line in
+`sample-output/`.
+
+**What it rests on, stated plainly.** Phosphorus in helium is UFF `x_I` and
+`D_I` scaled by 0.80, the construction chunk 8 recovered from the three helium
+halogens: `0.305*0.80*43.360 = 10.57984` meV and `4.147*0.80 = 3.3176` Angstrom,
+written to the same five figures those three use. **The 0.80 factor is attested
+in no published source.** So this row is a construction, not a measurement, and
+it prints the PROVISIONAL warning for exactly that reason. Chunk 4 refused
+phosphorus in helium on the principle that a missing parameter should be refused
+rather than guessed; that principle is not abandoned here, it is relocated into
+the warning -- the row is offered, and labelled.
+
+Anyone revisiting this should know it was a close call and that the contrary
+case was made: Iain Campuzano's reply is about nitrogen throughout, all three
+papers it cites are nitrogen studies, and it does not mention helium. Extending
+a helium-only factor to a fourth element is extrapolation. It was taken as a
+deliberate decision, on the grounds that refusing an element the recipe covers
+serves nobody, with the caveat written into the source, `README.md`,
+`docs/parameters.md` and the run's own output.
+
+**The hard-sphere radius is phosphorus's own, and that is not a guess.** 4.2
+Angstrom comes from `mobcal_N2.f`. It transfers because `rhs` is gas-independent
+in this code: every element defined in both files carries the same value in
+both -- all twelve that were shared before this commit, without exception. So
+phosphorus does *not* print the borrowed-radius
+warning, and it is the only row that prints one of the two warnings and not the
+other.
+
+**That divergence is the gate's gain.** Until chunk 9 the provisional and
+borrowed-radius warnings fired on the same three rows, so a count could not tell
+them apart -- either error was invisible. Now He expects 8 and 6. Verified by
+mutation in both directions: deleting phosphorus's `write(8,603)` moves 8 to 6
+and leaves 6 alone; giving phosphorus carbon's 2.7 Angstrom and the matching
+`write(8,604)` moves 6 to 8, leaves 8 alone, and trips the pinned-value
+assertion as well. One failure each, on the count that should move.
+
+**The parameter set went to 2.1, not 3.0.** Helium's table gained an element and
+no existing row's values changed, which is a pure addition. Nitrogen's stayed at
+2.0 -- it did not change -- and that divergence is the entire argument for two
+version strings rather than one, made concrete for the first time. The 1.0 ->
+2.0 step, which chunk 5 was the first to print, moved both at once, so it could
+not demonstrate the property it was designed for.
+
+**The regeneration was two lines, and counted.** `sample-output/Choline_He.out`
+line 1 and its SUMMARY `He parameter set` line, 2.0 -> 2.1. Nothing else in
+either file: `Choline_N2.out` does not move at all, and choline contains no
+phosphorus, so neither warning fires on the fixture. As in chunk 5, the new
+reference is the fresh run passed through the gate's own normalization rather
+than raw output.
 
 ## The two array bounds
 
