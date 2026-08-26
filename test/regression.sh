@@ -5,7 +5,11 @@
 # Builds mobcal_He.f and mobcal_N2.f, runs Choline.mfj through both at the seed
 # recorded in the reference outputs, and compares the result against the
 # reference outputs committed under sample-output/. Those references are the
-# files published with Campuzano et al., Anal. Chem. 2012, 84, 1026-1033.
+# files published with Campuzano et al., Anal. Chem. 2012, 84, 1026-1033,
+# regenerated once in v1.1 for the two output changes that release makes -- the
+# version banner and the q1st column. Every other line of both files, including
+# all four cross sections and every stochastic diagnostic, still carries the
+# published g77 numbers, reproduced by the regenerating gfortran run.
 #
 # Usage:
 #   test/regression.sh                 both gases, all tiers
@@ -65,9 +69,15 @@
 # g77 printed that as 1.0417E+02; gfortran prints 1.0417D+02. Same value, same
 # digits, different exponent letter -- a Fortran runtime formatting difference,
 # not physics. Without this rule no gfortran build can match the published 2012
-# reference byte for byte, on any platform. Correcting the descriptor to 1pe
-# would remove the need for the rule, but that is a source change and a
-# reference regeneration, so it belongs to a later chunk, not to the gate.
+# reference byte for byte, on any platform.
+#
+# The v1.1 regeneration did not take the chance to drop this rule, though it
+# could have: the regenerated references were passed through this same
+# normalization before being committed, so they keep the published E spelling and
+# the rule is still what makes a live gfortran run match them. Correcting the
+# descriptor to 1pe would remove the need for it, but that is one more line of
+# output moving in the release that regenerates the fixtures, and the value of
+# that release is that its diff is exactly the two changes it claims.
 
 set -eu
 
@@ -166,7 +176,11 @@ for gas in $GASES; do
     # the input file had when it was generated, echoed on line 1, and the RANLUX
     # seed. Read both out of the reference rather than hardcoding them, so that
     # regenerating the references cannot silently desynchronize the harness.
-    staged=$(sed -n '1s/^ input file name = *//p' "$REF" | tr -d "$CR" | sed 's/ *$//')
+    # First occurrence, not line 1: since v1.1 the file opens with the version
+    # banner, and the name is echoed again in SUMMARY, so anchoring on either
+    # end of the file would break on a later output change.
+    staged=$(grep -F ' input file name = ' "$REF" | head -1 \
+               | sed 's/^ input file name = *//' | tr -d "$CR" | sed 's/ *$//')
     seed=$(grep 'using RANLUX with seed integer =' "$REF" | head -1 \
              | sed 's/.*= *//' | tr -d "$CR ")
     [ -n "$staged" ] || staged=Choline.mfj

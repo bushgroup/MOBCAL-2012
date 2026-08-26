@@ -83,6 +83,16 @@ c
 c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
+      include 'mobcal_version.inc'
+c
+c     The version of the helium parameter table, versioned separately
+c     from the code because the helium and nitrogen tables are revised
+c     independently -- see mobcal_version.inc.  2.0 is the table
+c     as of v1.1: the nine elements published with Campuzano et al. 2012
+c     plus chlorine, bromine and iodine.
+c
+      character*(*) verparm
+      parameter (verparm='2.0')
       dimension tmc(lcoord),tmm(lcoord),ehsc(lcoord),ehsm(lcoord),
      ?pac(lcoord),pam(lcoord),asympp(lcoord)
       character*30 filen1,filen2,unit,dchar,xlabel
@@ -123,6 +133,13 @@ c
 c     ***************************************************************
 c
       open (8,file=filen2)
+c
+c     First line of the output file: which build wrote it, and which
+c     parameter table it used.  Printed here rather than from FCOORD so
+c     that it precedes everything, including a refusal.
+c
+      write(8,599) vercode,verparm
+  599 format(1x,'MOBCAL ',a,' (mobcal_He.f), He parameter set ',a)
 c
 c     print switches ip=1  print scattering angles
 c                    it=1  print trajectory
@@ -346,8 +363,9 @@ c
 c
 c     print out summary
 c
-      write(8,605) filen1,xlabel
-  605 format(///1x,'SUMMARY',//1x,'program version = junkn.f',
+      write(8,605) vercode,verparm,filen1,xlabel
+  605 format(///1x,'SUMMARY',//1x,'program version = MOBCAL ',a,
+     ?' (mobcal_He.f)',/1x,'He parameter set = ',a,
      ?/1x,'input file name = ',a30,/1x,'input file label = ',a30)
       if(dchar.eq.'equal'.and.tmmob.ne.0.d0) write(8,606) 
   606 format(1x,'using a uniform charge distribution')
@@ -2017,8 +2035,20 @@ c
       write(8,675)
   675 format(//1x,'average values for q1st',//5x,
      ?'gst2',8x,'wgst',8x,'q1st')
+c
+c     q1st(ig) accumulates one contribution per complete cycle -- it is
+c     summed inside the ic loop above, over itn cycles, and each of
+c     those contributions is already the average over the imp random
+c     points.  So the average is over itn.  Through v1.0 this divided by
+c     inp, the number of velocity points, which is the loop bound of the
+c     loop it is printed from but not the number of terms in the sum: at
+c     the shipped itn=10 and inp=40 every value in this column was
+c     printed four times too small.  A print bug only -- q1st is not
+c     read back anywhere, and om11st, the cross section and its
+c     standard deviation are accumulated separately.
+c
       do 4012 ig=1,inp
- 4012 write(8,676) pgst(ig)*pgst(ig),wgst(ig),q1st(ig)/dfloat(inp)
+ 4012 write(8,676) pgst(ig)*pgst(ig),wgst(ig),q1st(ig)/dfloat(itn)
   676 format(1x,1pe11.4,1x,e11.4,1x,e11.4)
       endif
 c

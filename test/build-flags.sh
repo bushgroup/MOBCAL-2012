@@ -51,13 +51,13 @@ case "$PLATFORM" in
     *)       LDFLAGS=${LDFLAGS:-} ;;
 esac
 
-# Both sources carry `include 'mobcal_limits.inc'`, which gfortran resolves
-# relative to the directory of the including source file. Verified rather than
-# assumed, on Windows as well: building from the repository root and building the
-# same source by absolute path from an unrelated working directory produce
-# byte-identical binaries. So the include adds a required source file but does
-# not change the build command, and README.md's "one command per gas" still
-# holds.
+# Both sources carry `include 'mobcal_limits.inc'` and, since v1.1,
+# `include 'mobcal_version.inc'`. gfortran resolves both relative to the
+# directory of the including source file. Verified rather than assumed, on
+# Windows as well: building from the repository root and building the same source
+# by absolute path from an unrelated working directory produce byte-identical
+# binaries. So the includes add required source files but do not change the build
+# command, and README.md's "one command per gas" still holds.
 
 require_compiler() {
     command -v "$FC" >/dev/null 2>&1 || {

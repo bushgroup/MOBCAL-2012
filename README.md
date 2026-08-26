@@ -17,16 +17,22 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 + `mobcal_He.f` Fortran 77 source code
 + `mobcal_N2.f` Fortran 77 source code
 + `mobcal_limits.inc` The compiled-in array bounds, included by both sources. **Required to compile**, and the one file to edit if you need larger limits
++ `mobcal_version.inc` The release version of the code, included by both sources. **Required to compile**
 + `mobcal.in` Parameter file. Sets input file name, output file name, and random number seed
 + `Choline.mfj` Input file used for choline in [1]
-+ `sample-output/Choline_He.out` Output file for choline in He gas, as published with [1]
-+ `sample-output/Choline_N2.out` Output file for choline in N2 gas, as published with [1]
++ `sample-output/Choline_He.out` Output file for choline in He gas
++ `sample-output/Choline_N2.out` Output file for choline in N2 gas
 
 The two files under `sample-output/` are also the fixtures the regression gate
-compares against, so they are reference data and not just examples.
+compares against, so they are reference data and not just examples. They are the
+files published with [1], regenerated in v1.1 for the two output changes that
+release makes — the version banner and the `q1st` column, listed in
+`CHANGELOG.md`. Every other line, including all four cross sections and every
+stochastic diagnostic, is unchanged from the published files.
 
 ### Repository
 + `LICENSE` GNU General Public License, version 3
++ `CHANGELOG.md` What changed in each release, and for the one release that regenerated the reference outputs, exactly which lines moved
 + `CLAUDE.md` Contributor notes: the three gates, line endings, and build flags
 + `test/regression.sh` Regression gate. Builds both sources, runs `Choline.mfj` at the seed recorded in the reference outputs, and compares the result against `sample-output/`
 + `test/bounds.sh` Array-bound gate. Checks that an input exceeding either compiled-in limit is refused with a message naming the limit and the actual count, and exits nonzero
@@ -65,15 +71,15 @@ gfortran -O3 -fno-automatic -std=legacy -static -o mHe.exe mobcal_He.f
 `gfortran` is part of GCC: available from every Linux package manager, from
 Homebrew on macOS, and from MSYS2 on Windows.
 
-Each source `include`s `mobcal_limits.inc`, so that file has to be present
-alongside it — but it does not change the command. `gfortran` resolves an
-`include` relative to the directory of the source file, so building either
-source by absolute path from an unrelated working directory produces a
-byte-identical binary. The build is still one compiler invocation with nothing
-to install.
+Each source `include`s `mobcal_limits.inc` and `mobcal_version.inc`, so both
+files have to be present alongside it — but they do not change the command.
+`gfortran` resolves an `include` relative to the directory of the source file, so
+building either source by absolute path from an unrelated working directory
+produces a byte-identical binary. The build is still one compiler invocation with
+nothing to install.
 
 **These are the flags the continuous-integration matrix uses** — three platforms,
-both gases, compared against the reference outputs published with [1].
+both gases, compared against the reference outputs under `sample-output/`.
 `test/build-flags.sh` holds the authoritative copy, and all three gates source it; if
 you change the flags in one place, change them in the other.
 
@@ -257,15 +263,32 @@ first conformer.
 | Linux, x86_64 | gfortran 14.3.0 |
 | macOS, arm64 | gfortran 14.4.0 (Homebrew) |
 | Windows, x86_64 | gfortran 14.2.0 (MinGW-w64), 16.2.0 (MSYS2) |
-| Linux, 2012 | `g77` — the compiler the `sample-output/` references were produced with |
+| Linux, 2012 | `g77` — the compiler the published output in [1] was produced with |
 
 All of these agree bit-for-bit on the 400,000-trajectory choline calculation,
 after the two normalizations documented in `CLAUDE.md`. `g77` is listed as
-provenance for the reference files, not as a requirement.
+provenance, not as a requirement: the `sample-output/` files still carry its
+numbers line for line, and the v1.1 regeneration reproduced every one of them.
 
 ## Run the compiled code
 + example: `./mn`  
 + If you use the provided `mobcal.in` file, the resulting `temp.out` file should be <u>exactly</u> the same as the provided output file.  
+
+### Which version produced an output file
+
+Every output file opens with a banner naming the build that wrote it and the
+version of the element table it used, and the SUMMARY at the end repeats both:
+
+```
+ MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0
+```
+
+The two are versioned separately because the helium and nitrogen tables are
+revised independently — v1.1 added three elements to helium and six to nitrogen,
+and corrected silicon in nitrogen only — so a table that did not change does not
+get a bump. Through v1.0 the SUMMARY instead read `program version = junkn.f`,
+identical in both sources, which named a scratch file rather than a version and
+could not distinguish a helium run from a nitrogen one.
 
 ## Limitations
 + This method has been validated for drug-like small molecular ions in low pressure, ambient temperature He and N2 mobility experiment [1].  
@@ -278,10 +301,14 @@ Each atom in an input file is identified by an integer mass key --
 unrecognized key is refused, naming the atom, the key you gave, the
 `nint(atomic weight)` convention, and the keys the build actually knows.
 
-| gas | defined keys (`nint` of atomic weight) |
-|---|---|
-| He | 1, 12, 14, 16, 19, 23, 28, 32, 35, 56, 80, 127 |
-| N2 | 1, 7, 12, 14, 16, 19, 23, 28, 31, 32, 35, 39, 56, 80, 127, 133 |
+| gas | parameter set | defined keys (`nint` of atomic weight) |
+|---|---|---|
+| He | 2.0 | 1, 12, 14, 16, 19, 23, 28, 32, 35, 56, 80, 127 |
+| N2 | 2.0 | 1, 7, 12, 14, 16, 19, 23, 28, 31, 32, 35, 39, 56, 80, 127, 133 |
+
+The parameter set is the version each output file's banner names. Set 1.0 is the
+table published with [1]: nine elements in helium, ten in nitrogen. Set 2.0 is
+this release's — the new elements below, and in nitrogen the silicon correction.
 
 Chlorine (35), bromine (80) and iodine (127) in **helium** are
 **provisional**: they were transformed from `mobcal_N2.f`'s X-X self

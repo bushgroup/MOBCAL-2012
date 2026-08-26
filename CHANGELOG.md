@@ -1,0 +1,93 @@
+# Changelog
+
+All notable changes to MOBCAL-2012. Versions are two-component, matching the
+repository's tags; `v2.0` is reserved for the first breaking change.
+
+## [1.1] — unreleased
+
+The physics is untouched. Every cross section this release computes for an input
+that v1.0 accepted is the value v1.0 computed, bit for bit — that is what
+`test/regression.sh` checks on Linux, macOS and Windows on every change.
+
+### Added
+
++ **Six elements**, from Iain Campuzano's parameterizations: chlorine (35),
+  bromine (80) and iodine (127) in both gases, plus lithium (7), potassium (39)
+  and caesium (133) in nitrogen. `mobcal_He.f` now defines 12 mass keys,
+  `mobcal_N2.f` 16.
++ **Two warnings**, printed into the output file whenever an atom actually uses
+  the parameter in question. One names a *provisional* Lennard-Jones parameter:
+  the three helium halogens were transformed from the nitrogen table by a single
+  factor rather than fitted to helium mobility data. The other names a *borrowed*
+  hard-sphere radius: all six new elements carry carbon's 2.7 Å, which for iodine
+  is smaller than its own Lennard-Jones σ.
++ **A version banner.** Every output file now opens with the build that wrote it
+  and the version of the element table it used, and the SUMMARY repeats both —
+  `MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0`. Code version and parameter-set
+  version are separate because the helium and nitrogen tables are revised
+  independently.
++ **Array-bound refusals.** An input declaring more than 1,000 atoms per
+  conformer or more than 100 coordinate sets is refused with a message naming
+  both the limit and the count given, and the program exits nonzero. Previously
+  it overran its `COMMON` blocks and could print a plausible-looking cross section
+  and exit successfully.
++ **Three test gates and a CI matrix** — `test/regression.sh` (physics),
+  `test/bounds.sh` (the refusals), `test/elements.sh` (the parameter table) — run
+  on Linux, macOS and Windows, one job per platform and gas.
++ **`mobcal_limits.inc`** and **`mobcal_version.inc`**, both required to compile.
+
+### Changed
+
++ **`README.md`'s build instructions.** `g77` is gone; the recommended build is
+  `gfortran -O3 -fno-automatic -std=legacy` (plus `-static` on Windows), which
+  reproduces the published output exactly and is about 2.3× faster than `-O0`.
+  `-fno-automatic` is mandatory at every optimization level: without it an
+  optimized build loses every trajectory and completes no cycles at all.
++ **The refusal for an unknown element** now names the mass key it was given,
+  states the `nint(atomic weight)` key convention, and lists the keys the build
+  defines. Its format was `i3`, which printed a wrong atom number above atom 999
+  — inside this build's own 1,000-atom bound.
++ **One element table per source file.** Each of `fcoord` and `ncoord` carried
+  its own copy; both now call one `ljparm` subroutine.
++ **The reference outputs under `sample-output/`** were regenerated, once, for
+  the two output changes below. Every other line of both files still carries the
+  numbers published with the 2012 paper.
+
+### Fixed
+
++ **Silicon in nitrogen.** `ncoord`'s copy of the table held iron's well depth
+  and radius (0.0130 / 2.9120) under silicon's comment, against `fcoord`'s
+  0.4020 / 4.2950. Any multi-conformer nitrogen run containing silicon therefore
+  used iron's parameters for every conformer after the first, and nothing in the
+  output said so. `fcoord`'s row is the one every single-conformer silicon run
+  ever published used, and it is the one now kept.
++ **The `q1st` column** in the *average values for q1st* table was divided by
+  `inp`, the number of velocity points, rather than by `itn`, the number of
+  cycles actually summed. At the shipped settings every value in that column was
+  four times too small. The corrected column satisfies the identity it always
+  should have — `sum(wgst * q1st)` now reproduces the printed
+  `mean OMEGA*(1,1)`, 1.904466 against 1.9045E+00, where before it gave exactly
+  a quarter of it. Nothing reads `q1st` back, so no cross section, standard
+  deviation or mobility was ever affected.
+
+### The regenerated reference diff
+
+`sample-output/` moved in exactly one commit. In `Choline_He.out`, 84 lines:
+
+| lines | change |
+|---|---|
+| +1 | the banner, above `input file name` |
+| −1 / +1 | `program version = junkn.f` → `program version = MOBCAL 1.1 (mobcal_He.f)` |
+| +1 | `He parameter set = 2.0`, in the SUMMARY |
+| −40 / +40 | the `q1st` column, every value 4.0000× its old one; `gst2` and `wgst` unchanged |
+
+`Choline_N2.out` is the same four changes. No cross section, no standard
+deviation, no stochastic diagnostic and no geometry line moved in either file.
+
+## [1.0] — 2012
+
+The code as published with Campuzano, I. D. G.; Bush, M. F.; Robinson, C. V.;
+Beaumont, C.; Richardson, K.; Kim, H.; Kim, H. I. "Structural Characterization of
+Drug-like Compounds by Ion Mobility Mass Spectrometry: Comparison of Theoretical
+and Experimentally Derived Nitrogen Collision Cross-sections." *Anal. Chem.*
+**2012**, *84*, 1026-1033.

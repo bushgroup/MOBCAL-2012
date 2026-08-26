@@ -323,6 +323,80 @@ are chunk 5's, not this one's -- taking any of them here would have meant
 regenerating `sample-output/` outside the one commit the plan reserves for
 that.
 
+## Chunk 5 -- the two output changes, and the one regeneration
+
+Chunk 5 is the only commit in v1.1 that moves a line in `sample-output/`. It
+carries exactly two output changes, done together so the fixtures are
+regenerated once.
+
+**The version banner.** Every run now opens with one line naming the build and
+the table it used, and the SUMMARY repeats both:
+
+```
+ MOBCAL 1.1 (mobcal_He.f), He parameter set 2.0
+```
+
+`mobcal_version.inc` holds the code version and nothing else. The
+**parameter-set version is deliberately not in it** -- it is a `parameter` in
+each main program instead, next to the write that prints it. The two tables are
+different quantities revised on different schedules (chunk 3 corrected silicon in
+nitrogen only; chunk 4 added three elements to helium and six to nitrogen), and
+one shared constant would force a bump in the table that did not change. The code
+version is shared because the opposite hazard applies to it: two files claiming
+different code versions is precisely the class of defect chunks 2 and 3 spent
+their time removing.
+
+Both are `character*(*)` named constants, so `a` prints them with no trailing
+blanks and a longer string needs no declaration edit. They are printed from the
+main program, immediately after `open (8,...)` -- before `fcoord` is called, so
+the banner precedes even a refusal.
+
+**The `q1st` divisor.** `q1st(ig)` is summed once per complete cycle, inside the
+`ic` loop, so it holds `itn` terms; each term is already the mean over the `imp`
+random points. It was printed divided by `inp`, the bound of the *printing*
+loop. At the shipped `itn=10`/`inp=40` every value in that column was four times
+too small. It is a print bug and nothing more -- `q1st` is never read back, and
+`om11st`, the cross sections and the standard deviation accumulate separately.
+The identity that settles it is in the file itself. `om11st` is
+`sum(wgst(ig)*temp1(ig))` over the same terms, so the cycle-averaged column has
+to satisfy `sum(wgst*q1st) = mean OMEGA*(1,1)`. On the regenerated helium
+reference it does, to every printed digit — 1.904466 against a printed
+`1.9045E+00`. On the v1.0 reference the same sum is 0.476116, exactly one
+quarter of it. And the regenerated column is 4.0000x the old one in all 40 rows,
+with `gst2` and `wgst` untouched.
+
+The plan says the factor is 20. It is 4. `itn=10`, `inp=40`.
+
+Three things about the regeneration that are easy to get wrong:
+
+**The committed reference is `normalize()`d output, not raw output.** The
+regenerating run was gfortran on Windows, so its raw output carries CRLF and
+prints `1.0417D+02` for format 604. Committing that would have put a third kind
+of change into a diff whose whole value is being exactly the two changes it
+claims. So the new references are the fresh output passed through the gate's own
+normalization -- the same function both sides of every comparison go through --
+which keeps the published `E` spelling and leaves the D-to-E rule doing the work
+it was written for.
+
+**The diff is the deliverable, and it was counted.** Helium: 84 changed lines,
+being 4 version lines (one added at the top, `program version` rewritten, one
+`He parameter set` added) and 80 `q1st` lines, 40 out and 40 in. Nothing else.
+Anything beyond that would have been a defect in chunks 1-4, which is what makes
+this gate worth stating so narrowly.
+
+**The harness had to change with it, in the same commit.** `test/regression.sh`
+read the staged input file name from *line 1* of the reference. Line 1 is now the
+banner. It reads the first matching line instead. A gate that reads its
+parameters out of its own fixture is right -- it cannot desynchronize -- but it
+has to be read as "the first occurrence", not "the top of the file".
+
+Not taken here, deliberately: correcting format 604 from `1pd` to `1pe`, which
+would retire a normalization rule but move a third line; and the integer masses
+of the six chunk-4 elements (chlorine 35.00 against 35.45, and five more), which
+are inconsistent with all ten legacy rows carrying real atomic weights to four
+significant figures. Neither touches choline, so neither needs this commit's
+regeneration and both can land on their own terms.
+
 ## The two array bounds
 
 `mobcal_limits.inc` holds both, and holds them once:
@@ -363,7 +437,9 @@ still holds; what changed is that it now lists a required source file.
 ## Two normalizations the comparison applies
 
 Both are narrow and both are needed to compare a gfortran build against the
-references published in 2012, which were produced with g77.
+references published in 2012, which were produced with g77. Chunk 5 regenerated
+those files, but through this same normalization, so they still hold g77's
+spelling and both rules still apply.
 
 1. **End-of-line CR**, for the reason above. Stripped only at end of line, never
    mid-line: the filename fields are blank-padded to 30 columns by an `a30` edit
@@ -380,8 +456,11 @@ references published in 2012, which were produced with g77.
    digits, different exponent letter — a runtime formatting difference, not
    physics. Without this rule no gfortran build can match the published
    references byte for byte on any platform. Correcting the descriptor to `1pe`
-   would remove the need for the rule, but that changes output and would require
-   regenerating the references, so it is not done here.
+   would remove the need for the rule. Chunk 5 was the moment to do it — it
+   regenerates the fixtures anyway — and chose not to, so that the one
+   regeneration commit's diff would contain exactly the two changes it claims and
+   nothing that merely rode along. It is now a change that costs a regeneration
+   of its own.
 
 ## Building
 
