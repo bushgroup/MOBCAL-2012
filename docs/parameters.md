@@ -1,8 +1,8 @@
 # Where the Lennard-Jones parameters come from
 
 Every number in either source file's element table, and how to re-derive it.
-`CLAUDE.md`'s *The one element table* has the file-and-line detail and the
-editing hazards; this page is the provenance.
+`CLAUDE.md`'s *The one element table* has the merge history and the editing
+hazards; this page is the provenance.
 
 The short version: **`mobcal_N2.f`'s table is UFF throughout**, and
 **`mobcal_He.f`'s is not** — its nine original rows are direct fits to helium
@@ -19,9 +19,11 @@ subroutines, separately versioned, and why only one of them prints a warning.
 | `rolj` | σ in m, written as `<angstrom>d0*1.0d-10` | `sqrt(rogas · x) · convr · 1.0d-10` |
 | combining rule | none | geometric mean with the gas |
 
-`rolj` is σ in both files: the potential is
-`4ε(σ¹²/r¹² − σ⁶/r⁶)` (`mobcal_He.f:1058`). Merging the two tables would mean
-inventing a conversion that exists in neither source.
+`rolj` is σ in both files: the potential is `4ε(σ¹²/r¹² − σ⁶/r⁶)`, assembled
+in `dljpot` under the comment `c     LJ potential` out of the `eox4`, `ro6lj`
+and `ro12lj` that `fcoord` and `ncoord` precompute from a row's ε and σ.
+Merging the two tables would mean inventing a conversion that exists in
+neither source.
 
 ## `mobcal_N2.f`: UFF times one factor per element
 
@@ -236,11 +238,22 @@ agreement with the contributor's own files to correct.
 
 ## Adding an element
 
-One row in `ljparm` per gas — `mobcal_He.f:714`, `mobcal_N2.f:721` — and one
-entry in the `format 602` key list beside it. Then `test/elements.sh`, which
-reads the parameters back out of the real subroutines rather than out of the
-program's output, because for any coordinate set after the first they do not
-appear in the output at all.
+One row in `ljparm` per gas — one such subroutine per source file — and one
+entry in the format 602 key list a few lines below the rows. That list is a
+hardcoded string and no gate compares it against the rows, so check it by
+hand; each file should print the same line twice:
+
+```sh
+for f in mobcal_He.f mobcal_N2.f; do
+  awk '/^      subroutine ljparm/,/^      end$/' $f |
+    grep -o 'imass(iatom)\.eq\.[0-9]*' | grep -o '[0-9]*$' | sort -n | paste -sd,
+  grep -A4 "602 format(1x,'type not defined" $f | grep -o "'[0-9,]*'" | tr -d "'"
+done
+```
+
+Then `test/elements.sh`, which reads the parameters back out of the real
+subroutines rather than out of the program's output, because for any
+coordinate set after the first they do not appear in the output at all.
 
 For nitrogen the recipe is settled: take UFF `x_I` and `D_I`, apply the factor
 for that element's class, write four decimals. For helium there is no settled

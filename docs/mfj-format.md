@@ -1,10 +1,9 @@
 # The `.mfj` input format
 
 This is a precise description of the file `mobcal.in` names as its input —
-`Choline.mfj` is the shipped example. It is read by `fcoord`
-(`mobcal_He.f:494`, `mobcal_N2.f:497`), which serves the first coordinate
-set, and by `ncoord` (`mobcal_He.f:2723`, `mobcal_N2.f:2894`), which serves
-every coordinate set after the first. The two subroutines mostly agree, but
+`Choline.mfj` is the shipped example. It is read by `fcoord`, which serves
+the first coordinate set, and by `ncoord`, which serves every coordinate set
+after the first — one of each in each source file. The two mostly agree, but
 one disagreement — in `mobcal_N2.f` only — will silently change your answer
 if you don't know about it; see *Charge modes* below.
 
@@ -29,15 +28,16 @@ line 7+inatom:                      (last atom of coordinate set 1)
   ...                               (repeat for sets 3..icoord)
 ```
 
-Lines 1, 4 and 5 are read with a fixed-width `a30` edit descriptor
-(`mobcal_He.f:518,567-568`), not list-directed. That means:
+Lines 1, 4 and 5 are read with a fixed-width `a30` edit descriptor — the
+three `read(9,'(a30)')` statements near the top of `fcoord`, taking `xlabel`,
+`unit` and `dchar` — not list-directed. That means:
 
 - **Leading whitespace is significant.** `' ang'` is not equal to `'ang'` —
   Fortran character comparison blank-pads the *shorter* string, it does not
   trim the longer one. A stray leading space on line 4 or line 5 makes the
   unit or charge-mode check fail silently into the generic refusal (`units
-  not specified` / `charge distribution not specified`,
-  `mobcal_He.f:589-595,607-614`). Since v1.2 that refusal reaches the console
+  not specified`, format 610, and `charge distribution not specified`,
+  format 632, both in `fcoord`). Since v1.2 that refusal reaches the console
   and exits 1; through v1.1 it was a bare `stop`, printing nothing to the
   terminal and exiting 0. If an older run "does nothing" and the output file
   is only a few lines long, check for a leading space first.
@@ -52,12 +52,12 @@ convention, not a requirement.
 ## The element key is a lookup, not a mass
 
 The fourth field on each atom line is read into a real variable, then
-immediately replaced: `imass(iatom)=nint(ximass)` (`mobcal_He.f:610`,
-`mobcal_N2.f:613`/`2925`). That integer is looked up in the per-element table
-(`ljparm`, `mobcal_He.f:714`, `mobcal_N2.f:721`), and it is the table's
-value — not the number you wrote — that becomes the atom's actual mass for
-every subsequent calculation, including the `mass of ion` line and the
-reduced-mass constant `mu`. Two consequences:
+immediately replaced: `imass(iatom)=nint(ximass)`, once in `fcoord` and again
+in `ncoord`, in both files. That integer is looked up in the per-element table
+(`ljparm`, one per source file), and it is the table's value — not the number
+you wrote — that becomes the atom's actual mass for every subsequent
+calculation, including the `mass of ion` line and the reduced-mass constant
+`mu`. Two consequences:
 
 - **The column is conventionally the integer atomic weight** (12 for carbon,
   35 for chlorine, ...), because `nint(atomic weight)` is the convention the
@@ -72,28 +72,31 @@ reduced-mass constant `mu`. Two consequences:
   give an atom a mass that isn't one of the table's own values.
 
 An unrecognized key names the atom, the key, the `nint(atomic weight)`
-convention, and the full list of keys the build defines (`mobcal_He.f:888-896`,
-format 602) — that message is generated from the build's actual table, so it
-can't drift out of sync with what the code accepts.
+convention, and the full list of keys the build defines — `ljparm`'s
+`itest.eq.0` arm, format 602. That list is a hardcoded string sitting
+immediately below the rows it describes, not something generated from them,
+and no gate compares the two; it is accurate in both files today, and keeping
+it so is a step in *Adding an element* in `docs/parameters.md`, which gives
+the one-line check.
 
 ## Units
 
 Line 4 must be exactly `ang` or `au`. `au` coordinates are converted to
-angstroms by multiplying by `0.52917706` (`mobcal_He.f:612-614`,
-`mobcal_N2.f:615-617`) — a Bohr radius in angstroms, hardcoded at the
-precision the code shipped with rather than looked up from a current
-constants table. Not the same last digit as the present CODATA value; that
-is provenance, not a bug, and correcting it would be a physics-affecting
-change out of scope for documentation. Conversion happens before centering
-and before the correction factor is applied.
+angstroms by multiplying by `0.52917706` (the `if(unit.eq.'au')` block inside
+the atom loop, in `fcoord` and again in `ncoord`) — a Bohr radius in
+angstroms, hardcoded at the precision the code shipped with rather than looked
+up from a current constants table. Not the same last digit as the present
+CODATA value; that is provenance, not a bug, and correcting it would be a
+physics-affecting change out of scope for documentation. Conversion happens
+before centering and before the correction factor is applied.
 
 ## The correction factor
 
-Line 6 multiplies every centered coordinate: `fx=(fx-fxo)*1.d-10*correct`
-(`mobcal_He.f:666-668`). It is applied after centering on the mass-weighted
-center of mass and after the unit conversion, so it scales the whole
-structure uniformly around its own center of mass. `1.0000` (no correction)
-is what every shipped fixture uses.
+Line 6 multiplies every centered coordinate:
+`fx(iatom)=(fx(iatom)-fxo)*1.d-10*correct`, in `fcoord` and again in `ncoord`.
+It is applied after centering on the mass-weighted center of mass and after
+the unit conversion, so it scales the whole structure uniformly around its own
+center of mass. `1.0000` (no correction) is what every shipped fixture uses.
 
 ## Charge modes
 
@@ -108,16 +111,17 @@ atom line) is only ever *read* when the mode is `calc` — except that
 | `none` | `0.d0` for every atom; only the Lennard-Jones part of the potential is used |
 
 **`equal` means a different total charge in the two gases.** In
-`mobcal_He.f`, `equal` mode reads only 4 columns per atom line
-(`mobcal_He.f:602-609`) and sets every atom to `1.d0/inatom`
-(`mobcal_He.f:618-621`) — the 5th column, if present, is never touched.
-In `mobcal_N2.f`, the `if(dchar.eq.'calc')` branch that would skip the
-charge column is commented out (`mobcal_N2.f:605,610-612` — dead code, left
-as found), so **`fcoord` always reads 5 columns, in every charge mode**, sums
-them into `tcharge`, and `equal` mode sets every atom to
-`tcharge/dfloat(inatom)` (`mobcal_N2.f:621-625`) — the *sum of whatever is in
-your charge column*, divided evenly, not a hardcoded `1/inatom`. Two
-consequences:
+`mobcal_He.f`, `fcoord`'s `if(dchar.eq.'calc')` branch takes the 4-column
+`else` arm, so `equal` mode reads only 4 columns per atom line, and the
+`if(dchar.eq.'equal')` loop just below sets every atom to
+`pcharge(iatom)=1.d0/dfloat(inatom)` — the 5th column, if present, is never
+touched. In `mobcal_N2.f`, that same `if(dchar.eq.'calc')` branch is
+commented out in `fcoord` — its `c      else` / `c      read` / `c      endif`
+lines are still there, dead code left as found — so **`fcoord` always reads
+5 columns, in every charge mode**, sums them into `tcharge`, and `equal` mode
+sets every atom to `tcharge/dfloat(inatom)` (the commented-out `1.d0/dfloat`
+line sits directly above it) — the *sum of whatever is in your charge column*,
+divided evenly, not a hardcoded `1/inatom`. Two consequences:
 
 - A 4-column `equal`-mode file that works in `mobcal_He.f` will hit
   end-of-record trying to read a 5th field in `mobcal_N2.f`'s first
@@ -138,7 +142,7 @@ therefore both correct for `mobcal_He.f` and required for `mobcal_N2.f`'s
 first coordinate set, and it removes the silent total-charge trap above.
 
 `ncoord`, unlike `fcoord`, honors the `dchar` branch correctly in **both**
-gases (`mobcal_He.f:2748-2753`, `mobcal_N2.f:2918-2924`) — it is only
+gases — its `if(dchar.eq.'calc')` is live in each — it is only
 `mobcal_N2.f`'s `fcoord`, serving coordinate set 1, that is asymmetric with
 its own `ncoord`. `equal`/`none` mode conformers 2..`icoord` therefore parse
 correctly in nitrogen even with a 4-column line — but writing 5 columns on
@@ -146,17 +150,18 @@ every line, every conformer, sidesteps having to remember which routine
 reads which set.
 
 `none` mode never prints a total-charge line in `mobcal_N2.f`
-(`mobcal_N2.f:633`, `dchar.ne.'none'`) but only `calc` does in
-`mobcal_He.f` (`mobcal_He.f:628`) — a minor output difference, not a parsing
-trap, listed here for completeness.
+(`if(dchar.ne.'none') write(8,615)` in `fcoord`) but only `calc` does in
+`mobcal_He.f` (`if(dchar.eq.'calc')`, same place, same format 615) — a minor
+output difference, not a parsing trap, listed here for completeness.
 
 ## Conformer blocks
 
 If `icoord` > 1, each coordinate set after the first is preceded by exactly
-**one throwaway line**, read and discarded (`read(9,'(a30)',end=100) dummy`,
-`mobcal_He.f:2744`, `mobcal_N2.f:2915`). The main program's own header
-comment calls this "a blank line", but the code doesn't check its content at
-all — any single line works as the separator, including a non-blank label.
+**one throwaway line**, read and discarded — `read(9,'(a30)',end=100) dummy`,
+the first executable statement of `ncoord` in both files. The main program's
+own header comment calls this "a blank line", but the code doesn't check its
+content at all — any single line works as the separator, including a non-blank
+label.
 `test/silicon-2conf.mfj` uses `conformer 2 -- deliberately identical to
 conformer 1` as that line, for exactly this reason: it documents the file
 while proving the separator need not be blank.
@@ -165,7 +170,7 @@ Every coordinate set in a file must declare the same `inatom` — there is one
 atom count on line 3, used for every set — and the atoms are matched by
 position, not re-identified, so set 2's atom 5 must be the same physical atom
 as set 1's atom 5 for the mass-conservation check (`masses do not add up`,
-`mobcal_N2.f:2939-2944`) to pass.
+`ncoord`'s format 624, in both files) to pass.
 
 ## Worked example
 
@@ -191,9 +196,9 @@ here are cosmetic.
 ## The two array bounds
 
 `inatom` and `icoord` are checked against the compiled-in limits before any
-atom is read (`mobcal_He.f:536-547,555-566`) — 1,000 atoms, 100 coordinate
-sets by default, both in `mobcal_limits.inc`. An input over either limit is
-refused by name; see *Size limits* in `README.md`.
+atom is read (`fcoord`, formats 651 and 616, in both files) — 1,000 atoms and
+100 coordinate sets by default, both in `mobcal_limits.inc`. An input over
+either limit is refused by name; see *Size limits* in `README.md`.
 
 ## See also
 
