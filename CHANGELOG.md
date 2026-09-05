@@ -74,6 +74,30 @@ repository's tags; `v2.0` is reserved for the first breaking change.
   (He/N2) for iodine and +0.0020 %/+0.012 % for caesium, for a light ion whose
   mass is essentially the one heavy atom. No code changed and nothing
   regenerated.
++ **`docs/` no longer cites the source by line number.** Of the 30 `file:line`
+  citations `docs/mfj-format.md` and `docs/parameters.md` carried, 22 pointed
+  at the wrong line, and two commits did all of it without changing the
+  behaviour of anything cited: one rewrote provenance *comments only* inside
+  the element tables, pushing everything below them down 22 lines in
+  `mobcal_He.f` and 46 in `mobcal_N2.f` — it edited `docs/mfj-format.md` in the
+  same breath, to add a *See also* bullet, without noticing that it had just
+  falsified nine of that file's references — and the other added one element
+  row. Every citation now names a subprogram plus a format label or a verbatim
+  statement (`ljparm`'s `itest.eq.0` arm, format 602), which no insertion can
+  move and which a reader can grep. The exit-status work above then tested that
+  in passing: it changed 55 lines in `mobcal_He.f` and 38 in `mobcal_N2.f`, and
+  all 45 anchors still resolved unedited. `CLAUDE.md` *How the documentation
+  cites the source* records the decision and the count behind it. One stale
+  `grep -n` transcript in `test/regression.sh` went the same way, to a `grep`
+  without `-n`.
++ **One ungated no-drift claim withdrawn.** `docs/mfj-format.md` said the list
+  of defined mass keys printed by format 602 "is generated from the build's
+  actual table, so it can't drift out of sync with what the code accepts". It
+  is a hardcoded string sitting below the rows; `test/elements.sh` checks that
+  the refusal fires and names the key, and `test/refusals.sh` checks that it
+  exits nonzero, but nothing compares the list against the rows. Both files'
+  lists are correct today, and *Adding an element* in `docs/parameters.md` now
+  carries the one command that shows it — labelled as the hand check it is.
 
 ## [1.1] — 2026-08-25
 

@@ -62,9 +62,9 @@
 # ion" line, is the only edit descriptor in either source file that uses 1pd
 # rather than 1pe:
 #
-#     $ grep -n 'pd[0-9]' mobcal_He.f mobcal_N2.f
-#     mobcal_He.f:686:  604 format(1x,'mass of ion =',1pd11.4)
-#     mobcal_N2.f:715:  604 format(1x,'mass of ion =',1pd11.4)
+#     $ grep 'pd[0-9]' mobcal_He.f mobcal_N2.f
+#     mobcal_He.f:  604 format(1x,'mass of ion =',1pd11.4)
+#     mobcal_N2.f:  604 format(1x,'mass of ion =',1pd11.4)
 #
 # g77 printed that as 1.0417E+02; gfortran prints 1.0417D+02. Same value, same
 # digits, different exponent letter -- a Fortran runtime formatting difference,

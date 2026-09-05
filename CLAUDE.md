@@ -747,6 +747,78 @@ Chunk 7 measured exactly that from a clean clone, and `README.md`'s *Run the
 compiled code* now names all three differences instead of promising an exact
 match.
 
+## How the documentation cites the source
+
+`docs/` names **a subprogram plus a format label, or a subprogram plus a
+verbatim statement** — "`ljparm`'s `itest.eq.0` arm, format 602";
+"`read(9,'(a30)',end=100) dummy`, the first executable statement of `ncoord`".
+It gives no line numbers. That is a decision taken in v1.2, and it was taken
+after measuring what the alternative had already cost.
+
+**The measurement.** `docs/mfj-format.md` and `docs/parameters.md` between them
+carried 30 `file:line` citations. Two commits made 22 of them wrong, and
+**neither changed the behaviour of anything cited**:
+
++ `59c737b` rewrote provenance *comments* inside the two element tables. No
+  non-comment line of either source changed — verified mechanically, and said
+  so in that commit's own message. It still pushed everything below the tables
+  down 22 lines in `mobcal_He.f` and 46 in `mobcal_N2.f`, falsifying 10
+  citations. Nine of them were in `docs/mfj-format.md`, which that same commit
+  edited, to add one *See also* bullet, without noticing. The tenth was in
+  `docs/parameters.md`, which that same commit *created*: its pointer at the
+  Lennard-Jones potential line was read off the file before the rewrite moved
+  it, and landed on `sum4=0.d0`. That citation was never correct, not for one
+  commit.
++ `28a4bd0` added one element row — chunk 9's phosphorus in helium — and three
+  lines in the main program for the 2.1 parameter-set string. That moved
+  `fcoord` down 3 and `ljparm`'s contents down 26 further, falsifying the
+  remaining 12: every helium citation the first commit had not already broken.
+
+The 8 that survived are all in `mobcal_N2.f` and all at or above `ljparm`'s own
+header — the one region neither commit inserted into. That is the whole
+mechanism: these files gain element rows every release and gain comments
+whenever somebody learns something about a row, and a citation's correctness
+depends on nobody having done either above it.
+
+No gate can fail when this happens. The four gates build and run the program,
+and `test/refusals.sh` reads the sources themselves; none of them reads
+`docs/`. An ungated claim that decays on a schedule
+is what *Weakening T3 is a commit, not a default* exists to prevent, and a
+stale citation is worse than no citation: it sends a reader to a real line that
+is not the one meant, which reads as a misunderstanding of the code rather than
+as a broken pointer.
+
+**Half the address is the subprogram, and that is not decoration.** Format
+labels are unique within a program unit and nowhere else. `602` occurs six
+times in `mobcal_N2.f`; `624`, `616` and `651` occur twice each in both files.
+So "format 602" alone is ambiguous and "`ljparm`, format 602" is exact. For
+code carrying no label — `imass(iatom)=nint(ximass)`, the `if(unit.eq.'au')`
+block — quote the statement instead. That is what a reader greps for anyway,
+which is why most of these citations already carried the text *and* a number:
+the number was redundant before it was wrong.
+
+The rule covers pasted `grep -n` output too. `test/regression.sh` carried a
+transcript of the `1pd` grep whose two line numbers had drifted by 46 and 73;
+it now shows the same grep without `-n`.
+
+**The rule was tested before it was committed, by accident.** `cd45c29` landed
+on `v1.2-dev` while this change was in review: it converted every refusal to
+`call exit(1)`, changing 55 lines in `mobcal_He.f` and 38 in `mobcal_N2.f`.
+All 45 anchors the rewritten docs use still resolved, unedited, at the same
+multiplicity — checked, not assumed. The one thing in `docs/` that commit *did*
+have to touch by hand was a line-number citation it had added itself, in the
+same file, for a refusal whose line numbers its own change moved.
+
+**One claim of the same class was corrected alongside them.**
+`docs/mfj-format.md` said the list of defined keys in format 602 "is generated
+from the build's actual table, so it can't drift out of sync with what the code
+accepts". It is not generated from anything — it is a hardcoded string a few
+lines below the rows, `test/elements.sh` asserts that the refusal fires and
+names the key but never compares the list against the rows, and nothing else
+compares them either. Both files' lists are in fact correct today. *Adding an
+element* in `docs/parameters.md` now carries the one command that shows it, and
+says plainly that it is a hand check.
+
 ## Building
 
 The recipe is `-O3 -fno-automatic -std=legacy`, plus `-static` on Windows. It
