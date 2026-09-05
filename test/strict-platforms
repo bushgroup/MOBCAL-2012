@@ -1,0 +1,28 @@
+# Platforms on which tier T3 -- whole-file byte identity against the reference
+# outputs, after normalization -- is a GATING check rather than a reported one.
+#
+# One platform key per line: linux, macos, or windows. Blank lines and lines
+# starting with '#' are ignored.
+#
+# Why this file exists instead of a flag in the script. T3 is the only check
+# that is tight enough to catch a wrong Lennard-Jones epsilon or sigma: those
+# parameters reach nothing in the deterministic prologue, so tier T1 cannot see
+# them and tier T2 would only notice a gross error. Chunks 3 and 4 of the
+# release plan state their own gate as "byte-identical on the committed
+# fixtures", and this is what makes that claim mean something.
+#
+# But T3 is also the check most likely to fail for a reason that is not physics:
+# a different compiler may sum hundreds of thousands of trajectory
+# contributions in a different order, and the last printed digit moves.
+#
+# So every platform starts listed here, as the hypothesis. If a platform turns
+# out not to be byte-reproducible, removing it is a commit with a written reason
+# in this file -- visible, reviewed, and dated -- instead of an invisible
+# default. A gate that gets quietly weakened is worse than no gate, because
+# every later change inherits its reassurance.
+#
+# T1 and T2 gate on every platform regardless of this file.
+
+linux
+macos
+windows

@@ -1,0 +1,175 @@
+name: regression
+
+# The gate described in test/regression.sh, run on the three platforms the code
+# is expected to build on. One job per (platform, gas) pair rather than one job
+# running both gases: each run is 400,000 trajectories and takes minutes, so
+# splitting halves the wall time and a red square names the failing combination
+# without anyone opening a log.
+#
+# fail-fast is off deliberately. When a platform diverges we need to see what
+# every OTHER platform did in the same run -- that is the evidence that decides
+# whether the divergence is a physics change or one platform's floating-point
+# summation order, and therefore whether test/strict-platforms should change.
+
+on:
+  # push is limited to main on purpose. A development branch with an open pull
+  # request would otherwise match both triggers and run the whole matrix twice
+  # for one commit. That is wasteful anywhere; here the n2 jobs are measured in
+  # hours, so it is worth the narrower trigger. Branch pushes with no open pull
+  # request get no run -- use workflow_dispatch when that is what you want.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Superseded runs are cancelled rather than left to finish. Pushing a fixup to a
+# branch whose matrix still has hours to go should not leave both runs competing
+# for the same runners, and the older result is of no interest once the newer
+# commit exists.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ${{ matrix.gas }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        gas: [he, n2]
+        # The two gases are not remotely comparable in cost, so one shared
+        # timeout would be either useless or wrong. Measured on these runners,
+        # same 400,000 trajectories at the published seed:
+        #
+        #   platform          he        n2        n2/he
+        #   ubuntu-latest     2m 48s    62m 41s    22.4x
+        #   macos-latest      1m 12s    29m 21s    24.5x
+        #   windows-latest    2m 53s    64m 51s    22.5x
+        #
+        # mobcal_N2.f evaluates a four-site potential with a quadrupole term
+        # where mobcal_He.f evaluates one centre, so a ~22x cost is expected
+        # rather than suspicious. Worth knowing before anyone reduces the matrix
+        # to save time: n2 is the expensive half by a factor of twenty, and it
+        # is also the half with a real element-table bug to catch.
+        #
+        # Timeouts are roughly 2x the slowest observed run -- enough headroom
+        # for a slow runner or a busy queue, tight enough that a hang fails in
+        # reasonable time rather than sitting near GitHub's six-hour ceiling.
+        include:
+          - gas: he
+            timeout: 30
+          - gas: n2
+            timeout: 150
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up gfortran
+        id: fortran
+        uses: fortran-lang/setup-fortran@v1
+        with:
+          compiler: gcc
+          version: 14
+
+      # .gitattributes claims to pin line endings to LF in the working tree on
+      # every platform. This tests that claim instead of trusting it. It is the
+      # cheapest step in the workflow and it guards the assumption the whole
+      # comparison rests on -- if a Windows checkout silently reintroduced CRLF
+      # we would rather find out here, in one line, than inside a 300-line diff.
+      - name: Check the working tree is LF
+        shell: bash
+        run: |
+          set -eu
+          bad=0
+          for f in mobcal_He.f mobcal_N2.f \
+                   mobcal_limits.inc mobcal_version.inc \
+                   Choline.mfj mobcal.in \
+                   sample-output/Choline_He.out sample-output/Choline_N2.out \
+                   test/regression.sh test/bounds.sh test/elements.sh \
+                   test/build-flags.sh test/silicon-2conf.mfj \
+                   test/new-elements-he.mfj test/new-elements-n2.mfj; do
+            if LC_ALL=C grep -q "$(printf '\r')" "$f"; then
+              echo "CR found in $f"
+              bad=1
+            fi
+          done
+          if [ "$bad" -ne 0 ]; then
+            echo "The working tree is not LF. .gitattributes did not take effect."
+            exit 1
+          fi
+          echo "All checked files are LF."
+          # Informational, and deliberately not compared against a hardcoded
+          # number: the sources change, and a stale expectation is worse than
+          # none. The grep above is the actual check. This is here because the
+          # failure mode it guards against is size inflation -- a CRLF checkout
+          # of mobcal_He.f measured 90,793 bytes against an 88,015-byte blob --
+          # so the number next to git's own idea of the blob size is the useful
+          # thing to see in a log.
+          # Every line here must stay indented inside this block scalar. A
+          # backslash continuation starting at column 0 dedents out of the
+          # YAML block and makes the whole workflow file unparseable, which
+          # fails the run in 0s with no job ever starting.
+          for f in mobcal_He.f mobcal_N2.f; do
+            disk=$(wc -c < "$f")
+            blob=$(git cat-file -s "$(git rev-parse "HEAD:$f")")
+            echo "$f: $disk bytes on disk, $blob bytes in the blob"
+          done
+
+      # Before the regression gate, not after. This one finishes in seconds
+      # because every case is designed to terminate before any trajectory is
+      # integrated, and the regression gate that follows it takes up to an hour
+      # on the n2 jobs. A build error or a broken guard should not cost an hour
+      # to discover.
+      - name: Run the array-bound gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/bounds.sh --gas ${{ matrix.gas }} --keep
+
+      # Also seconds, and for the same reason: the probe it builds calls FCOORD
+      # and NCOORD directly and never integrates a trajectory. It is the only
+      # gate that can see the per-element Lennard-Jones parameters at all --
+      # they reach no line of the regression gate's deterministic tier, and for
+      # coordinate sets after the first the program cannot print them under any
+      # print switch.
+      - name: Run the element-table gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/elements.sh --gas ${{ matrix.gas }} --keep
+
+      - name: Run the regression gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/regression.sh --gas ${{ matrix.gas }} --keep
+
+      # Only reachable on failure, and it is exactly what a failure needs: the
+      # normalized reference, the normalized run, and the three diffs.
+      - name: Upload the diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gate-${{ matrix.os }}-${{ matrix.gas }}
+          path: |
+            test/_work/**/*.diff
+            test/_work/**/*.norm
+            test/_work/**/*.det
+            test/_work/**/run.log
+            test/_work/**/build.log
+            test/_bounds/**/*.out
+            test/_bounds/**/*.stdout
+            test/_bounds/**/build.log
+            test/_elements/**/*.out
+            test/_elements/**/*.dat
+            test/_elements/**/*.stdout
+            test/_elements/**/ljprobe.f
+            test/_elements/**/build.log
+          if-no-files-found: warn
+          retention-days: 14

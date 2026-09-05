@@ -82,10 +82,21 @@ c     ***************************************************************
 c
 c
       implicit double precision (a-h,m-z)
-      dimension tmc(100),tmm(100),ehsc(100),ehsm(100),
-     ?pac(100),pam(100),asympp(100)
+      include 'mobcal_limits.inc'
+      include 'mobcal_version.inc'
+c
+c     The version of the nitrogen parameter table, versioned separately
+c     from the code because the nitrogen and helium tables are revised
+c     independently -- see mobcal_version.inc.  2.0 is the table as of
+c     v1.1: the ten elements this file shipped with, silicon corrected
+c     from iron's row in NCOORD, plus chlorine, bromine, iodine,
+c     lithium, potassium and caesium.
+c
+      character*(*) verparm
+      parameter (verparm='2.0')
+      dimension tmc(lcoord),tmm(lcoord),ehsc(lcoord),ehsm(lcoord),
+     ?pac(lcoord),pam(lcoord),asympp(lcoord)
       character*30 filen1,filen2,unit,dchar,xlabel
-      parameter (len=1000)
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -123,6 +134,13 @@ c
 c     ***************************************************************
 c
       open (8,file=filen2)
+c
+c     First line of the output file: which build wrote it, and which
+c     parameter table it used.  Printed here rather than from FCOORD so
+c     that it precedes everything, including a refusal.
+c
+      write(8,599) vercode,verparm
+  599 format(1x,'MOBCAL ',a,' (mobcal_N2.f), N2 parameter set ',a)
 c
 c     print switches ip=1  print scattering angles
 c                    it=1  print trajectory
@@ -348,8 +366,9 @@ c
 c
 c     print out summary
 c
-      write(8,605) filen1,xlabel
-  605 format(///1x,'SUMMARY',//1x,'program version = junkn.f',
+      write(8,605) vercode,verparm,filen1,xlabel
+  605 format(///1x,'SUMMARY',//1x,'program version = MOBCAL ',a,
+     ?' (mobcal_N2.f)',/1x,'N2 parameter set = ',a,
      ?/1x,'input file name = ',a30,/1x,'input file label = ',a30)
       if(dchar.eq.'equal'.and.tmmob.ne.0.d0) write(8,606) 
   606 format(1x,'using a uniform charge distribution')
@@ -481,7 +500,7 @@ c     Reads in coordinates and other parameters.
 c
       implicit double precision (a-h,m-z)
       character*30 filen1,unit,dchar,xlabel
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       dimension imass(len),xmass(len) 
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
@@ -505,10 +524,49 @@ c
       read(9,*) icoord
       write(8,650) icoord
   650 format(1x,'number of coordinate sets =',i5)
+c
+c     Bound check, and not a nicety. icoord and inatom are read straight from
+c     the input and index arrays dimensioned lcoord and len in
+c     mobcal_limits.inc; that file explains at length why an unguarded overflow
+c     here is worse than a crash. Refuse, naming the limit and the actual
+c     count, and do it before any array is written.
+c
+c     call exit(1) rather than the bare `stop' the older refusals in this
+c     routine use. A bare stop exits 0, so a caller testing the status of a
+c     refused run cannot tell it from a successful one, which is the whole
+c     point here. The existing bare stops are deliberately left alone.
+c
+      if(icoord.gt.lcoord) then
+      write(8,651) icoord,lcoord
+  651 format(1x,'ERROR: input declares',i9,' coordinate sets;',
+     ?' this build holds',i9)
+      write(8,652)
+  652 format(1x,'refusing rather than corrupting memory. To raise the',
+     ?' limit, edit lcoord in mobcal_limits.inc and rebuild.')
+      write(6,651) icoord,lcoord
+      write(6,652)
+      close (8)
+      call exit(1)
+      endif
 c 
       read(9,*) inatom
       write(8,612) inatom
   612 format(1x,'number of atoms =',i4)
+c
+c     The atom bound, as above. This is the one that reaches the COMMON blocks.
+c
+      if(inatom.gt.len) then
+      write(8,616) inatom,len
+  616 format(1x,'ERROR: input declares',i9,' atoms; this build holds',
+     ?i9)
+      write(8,617)
+  617 format(1x,'refusing rather than corrupting memory. To raise the',
+     ?' limit, edit len in mobcal_limits.inc and rebuild.')
+      write(6,616) inatom,len
+      write(6,617)
+      close (8)
+      call exit(1)
+      endif
       read(9,'(a30)') unit
       read(9,'(a30)') dchar
 c
@@ -576,138 +634,7 @@ c      if(dchar.eq.'calc') write(8,615) tcharge,acharge
   615 format(1x,'total charge =',1pe11.4,/1x,
      ?'total absolute charge =',e11.4)
 c
-      do 2020 iatom=1,inatom
-      itest=0
-
-      eogas=0.06900d0
-      rogas=3.6600d0
-c     convert epsilon from kcal/mol to meV
-      conve=(4.2d0*0.01036427d0)
-      convr=0.890898718d0
-      
-c             
-c     hydrogen (average value of eo from ab initio calculations
-c     and ro from fitting mobilities of C6H6 and others) 
-
-      if(imass(iatom).eq.1) then
-      itest=1
-      xmass(iatom)=1.008d0
-      eolj(iatom)=dsqrt(eogas*0.0189)*conve*xe
-      rolj(iatom)=dsqrt(rogas*1.2409)*convr*1.0d-10
-      rhs(iatom)=2.2d0*1.0d-10
-      endif
-c
-c     carbon (from fitting C60 mobility)
-c
-      if(imass(iatom).eq.12) then
-      itest=1
-      xmass(iatom)=12.01d0
-      eolj(iatom)=dsqrt(eogas*0.0977)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.5814)*convr*1.0d-10
-c      eolj(iatom)=0.139373598*xe
-c      rolj(iatom)=3.85949064*0.890898718*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     nitrogen (same as carbon)
-c
-      if(imass(iatom).eq.14) then
-      itest=1
-      xmass(iatom)=14.01d0
-      eolj(iatom)=dsqrt(eogas*0.0828)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.3920)*convr*1.0d-10
-c      eolj(iatom)=0.112982299*xe
-c      rolj(iatom)=3.762562956*0.890898718*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c     
-c     oxygen (same as carbon)
-c
-      if(imass(iatom).eq.16) then
-      itest=1
-      xmass(iatom)=16.00d0
-      eolj(iatom)=dsqrt(eogas*0.0558)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.2550)*convr*1.0d-10
-c      eolj(iatom)=0.105356537*xe
-c      rolj(iatom)=3.679402125*0.890898718*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     sodium - Na+ from fitting potential derived by Viehland 
-c     (Chem. Phys. 85 (1984) 291) for Na+ + He interactions from mobility
-c     data. Note 12-6-4 doesn't provide a very good fit to Viehland's 
-c     potential. Viehland's potential is flatter at small r. We didn't
-c     include Viehland's first three points in the fit.
-c     Hard sphere radius from fitting 300 K Na+ low field mobility in He.
-c
-      if(imass(iatom).eq.23) then
-      itest=1
-      xmass(iatom)=22.99d0
-      eolj(iatom)=dsqrt(eogas*0.03000)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9830)*convr*1.0d-10
-      rhs(iatom)=2.853d0*1.0d-10
-      endif
-c
-c     silicon (from fitting mobilities of small silicon clusters)
-c
-      if(imass(iatom).eq.28) then
-      itest=1
-      xmass(iatom)=28.09d0
-      eolj(iatom)=dsqrt(eogas*0.4020)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.2950)*convr*1.0d-10
-      rhs(iatom)=2.95d0*1.0d-10
-      endif
-c
-c     sulfur (same as silicon)
-c
-      if(imass(iatom).eq.32) then
-      itest=1
-      xmass(iatom)=32.06d0
-      eolj(iatom)=dsqrt(eogas*0.2740)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.0350)*convr*1.0d-10
-c      eolj(iatom)=0.225144398*xe
-c      rolj(iatom)=3.950617673*0.890898718*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     iron (same as silicon)
-c
-      if(imass(iatom).eq.56) then
-      itest=1
-      xmass(iatom)=55.85d0
-      eolj(iatom)=dsqrt(eogas*0.0130)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9120)*convr*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     Phosphorous
-c
-      if(imass(iatom).eq.31) then
-      itest=1
-      xmass(iatom)=30.97d0
-      eolj(iatom)=dsqrt(eogas*0.305)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.1470)*convr*1.0d-10
-      rhs(iatom)=4.2d0*1.0d-10
-      endif
-c
-c     Flourine
-c
-      if(imass(iatom).eq.19) then
-      itest=1
-      xmass(iatom)=19.00d0
-      eolj(iatom)=dsqrt(eogas*0.0465)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.1285)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-      if(itest.eq.0) then
-      write(8,602) iatom
-  602 format(1x,'type not defined for atom number',i3)
-      close (8)
-      stop
-      endif
-c
- 2020 continue  
+      call ljparm(imass,xmass)
       m2=0.d0
       do 2021 iatom=1,inatom
  2021 m2=m2+xmass(iatom)
@@ -791,12 +718,306 @@ c
 c
 c     ***************************************************************
 c
+      subroutine ljparm(imass,xmass)
+c
+c     The per-element parameter table: atomic mass, Lennard-Jones well
+c     depth and radius, and hard-sphere radius, for every atom of the
+c     current coordinate set.  Refuses an element it does not know.
+c
+c     One table, called by both FCOORD (coordinate set 1) and NCOORD
+c     (sets 2...icoord).  Before v1.1 it was written out twice per
+c     source file and the two copies had already diverged: NCOORD in
+c     mobcal_N2.f carried iron's well depth and radius under silicon's
+c     comment, so every conformer after the first of a multi-conformer
+c     nitrogen run containing silicon was computed with iron's
+c     parameters, and nothing in the output said so.  A subroutine
+c     rather than an include, because a subroutine can be called
+c     directly by a test and cannot silently diverge again.
+c
+c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
+c     are reached through COMMON, as they were before.
+c
+c     EVERY ROW IN THIS TABLE IS UFF.  Each is Rappe's universal force
+c     field x_I and D_I (ref 4) times one per-element scaling factor,
+c     combined with the gas by the geometric-mean rule below:
+c
+c         eolj = sqrt(eogas * f*D_I) * conve * xe
+c         rolj = sqrt(rogas * f*x_I) * convr * 1.0d-10
+c
+c     The factors are 0.43 for hydrogen, 1.20 for nitrogen, 0.93 for
+c     carbon, oxygen, fluorine, chlorine, bromine, iodine, potassium
+c     and caesium, and 1.00 -- unscaled UFF -- for lithium, sodium,
+c     silicon, phosphorus, sulfur and iron.  Verified: every literal
+c     below reproduces f*D_I and f*x_I to five significant figures,
+c     the residual being the rounding of these four-decimal literals
+c     (potassium: 0.035*0.93 = 0.03255, written 0.0326).  Provenance
+c     is refs 1, 5 and 6.  docs/parameters.md has the full table.
+c
+c     THE PER-ROW PROVENANCE COMMENTS BELOW WERE NOT ABOUT THIS TABLE.
+c     "from fitting C60 mobility", the Viehland note on sodium, "from
+c     fitting mobilities of small silicon clusters", and every "(same
+c     as carbon)" and "(same as silicon)", describe the HELIUM pair
+c     parameters in mobcal_He.f; they were carried across when this
+c     table was written and say nothing true about a UFF row.  v1.1
+c     replaced each with the factor actually applied, keeping the
+c     original wording where it recorded something worth keeping.  The
+c     helium file still carries the originals, where they are correct.
+c
+c     eogas and rogas are unscaled UFF nitrogen (0.069, 3.660), so the
+c     buffer gas takes factor 1.00 while the ion's own nitrogen atoms
+c     take 1.20.  That asymmetry is in the fitted parameterization, not
+c     an oversight here.
+c
+c     conve is an approximate kcal/mol-to-eV conversion: it writes 4.2
+c     kJ/kcal where the exact figure is 4.184, so every well depth in
+c     this table is uniformly high by 4.2/4.184 = 1.0038241, or
+c     0.382 %.  DO NOT CORRECT IT.  It is inside every nitrogen result
+c     this code has published.  convr is 2**(-1/6), converting the UFF
+c     r_min to a Lennard-Jones sigma, which is what rolj is: the
+c     potential is 4*eps*(sigma^12/r^12 - sigma^6/r^6).
+c
+c     v1.1 chunk 4 added chlorine, bromine, iodine, lithium, potassium
+c     and caesium, by the same recipe as every other row here -- so
+c     unlike the He table's chlorine/bromine/iodine they carry no
+c     PROVISIONAL warning.  All six do borrow carbon's 2.7 Angstrom
+c     hard-sphere radius rather than carrying a fitted one; that prints
+c     a warning (format 604).  It does not fire for the ten legacy
+c     elements, even though three of those already carry the same
+c     2.7 Angstrom value.
+c
+      implicit double precision (a-h,m-z)
+      include 'mobcal_limits.inc'
+      dimension imass(len),xmass(len)
+      common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
+     ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
+      common/ljparameters/eolj(len),rolj(len),eox4(len),
+     ?ro6lj(len),ro12lj(len),dro6(len),dro12(len)
+      common/hsparameters/rhs(len),rhs2(len)
+c
+      eogas=0.06900d0
+      rogas=3.6600d0
+c     convert epsilon from kcal/mol to meV
+      conve=(4.2d0*0.01036427d0)
+      convr=0.890898718d0
+c
+      do 2020 iatom=1,inatom
+      itest=0
+c             
+c     hydrogen (UFF x 0.43).  The "average value of eo from ab initio
+c     calculations and ro from fitting mobilities of C6H6 and others"
+c     that stood here is mobcal_He.f's provenance, not this row's.
+
+      if(imass(iatom).eq.1) then
+      itest=1
+      xmass(iatom)=1.008d0
+      eolj(iatom)=dsqrt(eogas*0.0189)*conve*xe
+      rolj(iatom)=dsqrt(rogas*1.2409)*convr*1.0d-10
+      rhs(iatom)=2.2d0*1.0d-10
+      endif
+c
+c     carbon (UFF x 0.93; the C60-mobility fit is mobcal_He.f's)
+c
+      if(imass(iatom).eq.12) then
+      itest=1
+      xmass(iatom)=12.01d0
+      eolj(iatom)=dsqrt(eogas*0.0977)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.5814)*convr*1.0d-10
+c      eolj(iatom)=0.139373598*xe
+c      rolj(iatom)=3.85949064*0.890898718*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      endif
+c
+c     nitrogen (UFF x 1.20 -- the gas itself uses unscaled UFF
+c     nitrogen, eogas/rogas above)
+c
+      if(imass(iatom).eq.14) then
+      itest=1
+      xmass(iatom)=14.01d0
+      eolj(iatom)=dsqrt(eogas*0.0828)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.3920)*convr*1.0d-10
+c      eolj(iatom)=0.112982299*xe
+c      rolj(iatom)=3.762562956*0.890898718*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      endif
+c     
+c     oxygen (UFF x 0.93)
+c
+      if(imass(iatom).eq.16) then
+      itest=1
+      xmass(iatom)=16.00d0
+      eolj(iatom)=dsqrt(eogas*0.0558)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.2550)*convr*1.0d-10
+c      eolj(iatom)=0.105356537*xe
+c      rolj(iatom)=3.679402125*0.890898718*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      endif
+c
+c     sodium (UFF x 1.00, unscaled -- it pre-existed the scaling
+c     factors and was not re-optimized when they were fitted)
+c
+c     The Viehland provenance carried here from mobcal_He.f describes
+c     that file's He-Na+ row, not this one.  Kept for the record:
+c        Na+ from fitting potential derived by Viehland (Chem. Phys. 85
+c        (1984) 291) for Na+ + He interactions from mobility data. Note
+c        12-6-4 doesn't provide a very good fit to Viehland's potential.
+c        Viehland's potential is flatter at small r. We didn't include
+c        Viehland's first three points in the fit.  Hard sphere radius
+c        from fitting 300 K Na+ low field mobility in He.
+c
+      if(imass(iatom).eq.23) then
+      itest=1
+      xmass(iatom)=22.99d0
+      eolj(iatom)=dsqrt(eogas*0.03000)*conve*xe
+      rolj(iatom)=dsqrt(rogas*2.9830)*convr*1.0d-10
+      rhs(iatom)=2.853d0*1.0d-10
+      endif
+c
+c     silicon (UFF x 1.00, unscaled.  This is the row v1.1 adopted;
+c     NCOORD's copy held UFF IRON, 0.0130/2.9120, verbatim.  The
+c     silicon-cluster fit is mobcal_He.f's provenance, not this row's)
+c
+      if(imass(iatom).eq.28) then
+      itest=1
+      xmass(iatom)=28.09d0
+      eolj(iatom)=dsqrt(eogas*0.4020)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.2950)*convr*1.0d-10
+      rhs(iatom)=2.95d0*1.0d-10
+      endif
+c
+c     sulfur (UFF x 1.00, unscaled)
+c
+      if(imass(iatom).eq.32) then
+      itest=1
+      xmass(iatom)=32.06d0
+      eolj(iatom)=dsqrt(eogas*0.2740)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.0350)*convr*1.0d-10
+c      eolj(iatom)=0.225144398*xe
+c      rolj(iatom)=3.950617673*0.890898718*1.0d-10
+      rhs(iatom)=3.5d0*1.0d-10
+      endif
+c
+c     iron (UFF x 1.00, unscaled)
+c
+      if(imass(iatom).eq.56) then
+      itest=1
+      xmass(iatom)=55.85d0
+      eolj(iatom)=dsqrt(eogas*0.0130)*conve*xe
+      rolj(iatom)=dsqrt(rogas*2.9120)*convr*1.0d-10
+      rhs(iatom)=3.5d0*1.0d-10
+      endif
+c
+c     Phosphorous (UFF x 1.00, unscaled)
+c
+      if(imass(iatom).eq.31) then
+      itest=1
+      xmass(iatom)=30.97d0
+      eolj(iatom)=dsqrt(eogas*0.305)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.1470)*convr*1.0d-10
+      rhs(iatom)=4.2d0*1.0d-10
+      endif
+c
+c     Flourine (UFF x 0.93)
+c
+      if(imass(iatom).eq.19) then
+      itest=1
+      xmass(iatom)=19.00d0
+      eolj(iatom)=dsqrt(eogas*0.0465)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.1285)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      endif
+c
+c     chlorine (UFF x 0.93)
+c
+      if(imass(iatom).eq.35) then
+      itest=1
+      xmass(iatom)=35.00d0
+      eolj(iatom)=dsqrt(eogas*0.2111)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.6707)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     iodine (UFF x 0.93)
+c
+      if(imass(iatom).eq.127) then
+      itest=1
+      xmass(iatom)=127.00d0
+      eolj(iatom)=dsqrt(eogas*0.3153)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.1850)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     bromine (UFF x 0.93)
+c
+      if(imass(iatom).eq.80) then
+      itest=1
+      xmass(iatom)=80.00d0
+      eolj(iatom)=dsqrt(eogas*0.2334)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.8957)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     lithium (UFF x 1.00, unscaled -- no factor was fitted for it)
+c
+      if(imass(iatom).eq.7) then
+      itest=1
+      xmass(iatom)=7.00d0
+      eolj(iatom)=dsqrt(eogas*0.0250)*conve*xe
+      rolj(iatom)=dsqrt(rogas*2.4510)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     potassium (UFF x 0.93)
+c
+      if(imass(iatom).eq.39) then
+      itest=1
+      xmass(iatom)=39.00d0
+      eolj(iatom)=dsqrt(eogas*0.0326)*conve*xe
+      rolj(iatom)=dsqrt(rogas*3.5456)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+c     caesium (UFF x 0.93)
+c
+      if(imass(iatom).eq.133) then
+      itest=1
+      xmass(iatom)=133.00d0
+      eolj(iatom)=dsqrt(eogas*0.0419)*conve*xe
+      rolj(iatom)=dsqrt(rogas*4.2008)*convr*1.0d-10
+      rhs(iatom)=2.7d0*1.0d-10
+      write(8,604) iatom,imass(iatom)
+      endif
+c
+      if(itest.eq.0) then
+      write(8,602) iatom,imass(iatom)
+  602 format(1x,'type not defined for atom number',i4,
+     ?' (mass key',i4,').'/
+     ?1x,'element keys are nint(atomic weight); defined keys:'/
+     ?1x,'1,7,12,14,16,19,23,28,31,32,35,39,56,80,127,133')
+      close (8)
+      stop
+      endif
+c
+  604 format(1x,'WARNING: hard-sphere radius for atom',i4,
+     ?' (mass key',i4,') borrowed from carbon.')
+c
+ 2020 continue
+c
+      return
+      end
+c
+c     ***************************************************************
+c
       subroutine rantate
 c
 c     Rotates the cluster/molecule to a random orientation.  
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -828,7 +1049,7 @@ c
 c     Rotates the cluster/molecule.  
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -893,7 +1114,7 @@ c
 c     Subroutine to calculate L-J + ion-dipole potential.
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1097,7 +1318,7 @@ c     distance from the center of mass
 c
       implicit double precision (a-h,m-z)
       dimension pot(3000),sdx(200),sdy(200),sdz(200)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1229,7 +1450,7 @@ c
 c     Runs a small set of trajectories at a collision energy of kT.
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1335,7 +1556,7 @@ c
 c     Runs one trajectory
 c
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1384,7 +1605,7 @@ c
       implicit double precision (a-h,m-z)
       integer ns,nw,l
       dimension w(6),dw(6)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1579,7 +1800,7 @@ c
       implicit double precision (a-h,m-z)
       dimension w(6),dw(6),a(4),b(4),c(4),ampc(5),amcc(4),array(6,40),
      ?savw(40),savdw(40),q(40)
-      parameter (len=1000) 
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1665,7 +1886,7 @@ c     of the coordinates and momenta.
 c
       implicit double precision (a-h,m-z)
       dimension w(6),dw(6)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -1716,7 +1937,7 @@ c
       dimension pgst(100),wgst(100),b2max(100)
       dimension q1st(100),q2st(100),cosx(0:500)
       dimension om11st(100),om12st(100),om13st(100),om22st(100)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -2031,8 +2252,20 @@ c
       write(8,675)
   675 format(//1x,'average values for q1st',//5x,
      ?'gst2',8x,'wgst',8x,'q1st')
+c
+c     q1st(ig) accumulates one contribution per complete cycle -- it is
+c     summed inside the ic loop above, over itn cycles, and each of
+c     those contributions is already the average over the imp random
+c     points.  So the average is over itn.  Through v1.0 this divided by
+c     inp, the number of velocity points, which is the loop bound of the
+c     loop it is printed from but not the number of terms in the sum: at
+c     the shipped itn=10 and inp=40 every value in this column was
+c     printed four times too small.  A print bug only -- q1st is not
+c     read back anywhere, and om11st, the cross section and its
+c     standard deviation are accumulated separately.
+c
       do 4012 ig=1,inp
- 4012 write(8,676) pgst(ig)*pgst(ig),wgst(ig),q1st(ig)/dfloat(inp)
+ 4012 write(8,676) pgst(ig)*pgst(ig),wgst(ig),q1st(ig)/dfloat(itn)
   676 format(1x,1pe11.4,1x,e11.4,1x,e11.4)
       endif
 c
@@ -2100,7 +2333,7 @@ c     from code written by Alexandre Shvartsburg.
 c
       implicit double precision (a-h,m-z)
       dimension cof(-1:100),crof(100)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -2235,7 +2468,7 @@ c     Guides hard sphere scattering trajectory. Adapted from code
 c     written by Alexandre Shvartsburg.
 c 
       implicit double precision (a-h,m-z)
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
@@ -2710,7 +2943,7 @@ c     Reads in a new set of coordinates
 c
       implicit double precision (a-h,m-z)
       character*30 unit,dchar,dummy
-      parameter (len=1000)
+      include 'mobcal_limits.inc'
       dimension imass(len),xmass(len) 
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
@@ -2743,129 +2976,7 @@ c
       endif
  2000 continue
 c
-      do 2020 iatom=1,inatom
-      itest=0
-c
-      eogas=0.06900d0
-      rogas=3.6600d0
-c     convert epsilon from kcal/mol to meV
-      conve=(4.2d0*0.01036427d0)
-      convr=0.890898718d0
- 
-c     hydrogen (average value of eo from ab initio calculations
-c     and ro from fitting mobilities of C6H6 and others) 
-c
-      if(imass(iatom).eq.1) then
-      itest=1
-      xmass(iatom)=1.008d0
-      eolj(iatom)=dsqrt(eogas*0.0189)*conve*xe
-      rolj(iatom)=dsqrt(rogas*1.2409)*convr*1.0d-10
-      rhs(iatom)=2.2d0*1.0d-10
-      endif
-c
-c     carbon (from fitting C60 mobility)
-c
-      if(imass(iatom).eq.12) then
-      itest=1
-      xmass(iatom)=12.01d0
-      eolj(iatom)=dsqrt(eogas*0.0977)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.5814)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     nitrogen (same as carbon)
-c
-      if(imass(iatom).eq.14) then
-      itest=1
-      xmass(iatom)=14.01d0
-      eolj(iatom)=dsqrt(eogas*0.0828)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.3920)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c     
-c     oxygen (same as carbon)
-c
-      if(imass(iatom).eq.16) then
-      itest=1
-      xmass(iatom)=16.00d0
-      eolj(iatom)=dsqrt(eogas*0.0558)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.2550)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     sodium - Na+ from fitting potential derived by Viehland 
-c     (Chem. Phys. 85 (1984) 291) for Na+ + He interactions from mobility
-c     data. Note 12-6-4 doesn't provide a very good fit to Viehland's 
-c     potential. Viehland's potential is flatter at small r. We didn't
-c     include Viehland's first three points in the fit.
-c     Hard sphere radius from fitting 300 K Na+ low field mobility in He.
-c
-      if(imass(iatom).eq.23) then
-      itest=1
-      xmass(iatom)=22.99d0
-      eolj(iatom)=dsqrt(eogas*0.03000)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9830)*convr*1.0d-10
-      rhs(iatom)=2.853d0*1.0d-10
-      endif
-c
-c     silicon (from fitting mobilities of small silicon clusters)
-c
-      if(imass(iatom).eq.28) then
-      itest=1
-      xmass(iatom)=28.09d0
-      eolj(iatom)=dsqrt(eogas*0.0130)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9120)*convr*1.0d-10
-      rhs(iatom)=2.95d0*1.0d-10
-      endif
-c
-c     sulfur (same as silicon)
-c
-      if(imass(iatom).eq.32) then
-      itest=1
-      xmass(iatom)=32.06d0
-      eolj(iatom)=dsqrt(eogas*0.2740)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.0350)*convr*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     iron (same as silicon)
-c
-      if(imass(iatom).eq.56) then
-      itest=1
-      xmass(iatom)=55.85d0
-      eolj(iatom)=dsqrt(eogas*0.0130)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9120)*convr*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     Phosphorous
-c
-      if(imass(iatom).eq.31) then
-      itest=1
-      xmass(iatom)=30.97d0
-      eolj(iatom)=dsqrt(eogas*0.305)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.1470)*convr*1.0d-10
-      rhs(iatom)=4.2d0*1.0d-10
-      endif
-c
-c     Flourine
-c
-      if(imass(iatom).eq.19) then
-      itest=1
-      xmass(iatom)=19.00d0
-      eolj(iatom)=dsqrt(eogas*0.0465)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.1285)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-      if(itest.eq.0) then
-      write(8,602) iatom
-  602 format(1x,'type not defined for atom number',i3)
-      close (8)
-      stop
-      endif
-c
- 2020 continue  
+      call ljparm(imass,xmass)
 c
       mx=0.d0
       do 2021 iatom=1,inatom

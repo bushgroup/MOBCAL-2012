@@ -1,0 +1,64 @@
+# Output lines whose values depend on the pseudo-random number stream.
+#
+# One POSIX extended regular expression per line. Blank lines and lines
+# starting with '#' are ignored. test/regression.sh deletes every matching line
+# from both the reference and the freshly generated output before comparing what
+# remains character for character.
+#
+# THE DEFAULT IS "MUST MATCH". A line that is not listed here is required to be
+# byte-identical to the reference. That direction is deliberate: when a later
+# change adds a new output line, the gate fails and someone has to look at it,
+# rather than the new line quietly landing in an ignored bucket. If a new line
+# really is stochastic, add it here in the same commit that introduces it, and
+# say so in the commit message.
+#
+# "Stochastic" here means "varies with the random stream", not "varies run to
+# run". At a fixed seed on one platform every line below reproduces exactly.
+# They are separated out because floating-point summation order is not
+# guaranteed identical across compilers and platforms, and these are the lines
+# built from long accumulations over hundreds of thousands of trajectories.
+# The cross sections among them are checked numerically, with a tolerance, in
+# tier T2 -- they are excluded from the exact comparison, not from the gate.
+
+# --- MOBIL4: hard-sphere / projection-approximation Monte Carlo ---
+^ average PA mobility =
+^ inverse average PA mobility =
+^ average PA cross section =
+^ maximum number of reflections encountered =
+^ average EHS mobility =
+^ inverse average EHS mobility =
+^ average EHS cross section =
+
+# Convergence table under "order   cross section": an integer and one value.
+^ +[0-9]+ +[0-9]\.[0-9]{5}E[+-][0-9]{2}$
+
+# --- Random orientation drawn by ROTATE, and the potential extrema along the
+# --- resulting axes ---
+^ theta= .*phi= .*gamma=
+^ along [xyz] axis emax
+
+# --- Impact-parameter (b2max) search, and the per-velocity q1st averages ---
+# Both tables are three columns of E-format values; one pattern covers both.
+^ +[0-9]\.[0-9]{4}E[+-][0-9]{2} +[0-9]\.[0-9]{4}E[+-][0-9]{2} +[0-9]\.[0-9]{4}E[+-][0-9]{2}$
+
+# --- Per-trajectory diagnostics. The count of these blocks varies, which is
+# --- why the comparison deletes rather than blanks them. ---
+^ energy not conserved:
+^ gst2 = .*theta = .*phi = .*gamma =
+^ trajectory lost
+
+# --- Per-cycle mobility summary: cycle index plus four accumulated values ---
+^ +[0-9]+ +[0-9]\.[0-9]{4}E[+-][0-9]{2} +[0-9]\.[0-9]{4}E[+-][0-9]{2} +[0-9]\.[0-9]{4}E[+-][0-9]{2} +[0-9]\.[0-9]{4}E[+-][0-9]{2}$
+
+# --- MOBIL2 results and the second-order correction built from them ---
+^ mean OMEGA\*\(1,1\) =
+^ standard deviation =
+^ standard error of mean =
+^ f value for second order correction=
+^ omega\*12 =
+^ +u2 =
+^ average \(second order\) TM mobility =
+^ inverse average \(second order\) TM mobility =
+^ average TM cross section =
+^ standard deviation \(percent\) =
+^ number of failed trajectories =
