@@ -489,6 +489,16 @@ c
 c
  9999 continue
       close (8)
+c
+c     The one bare `stop' left in this file, and the only termination that
+c     exits 0. Every other termination -- the input refusals in FCOORD, LJPARM
+c     and NCOORD, and the internal consistency failures further down -- calls
+c     exit(1) and echoes its message to unit 6 as well as to the output file,
+c     so that a caller can tell a run that produced a number from one that did
+c     not. Before v1.2 all of them were bare stops and all of them reported
+c     success. test/refusals.sh drives every one it can reach with a small
+c     input and asserts that this is still the only bare stop in the file.
+c
       stop
       end
 c
@@ -531,10 +541,12 @@ c     mobcal_limits.inc; that file explains at length why an unguarded overflow
 c     here is worse than a crash. Refuse, naming the limit and the actual
 c     count, and do it before any array is written.
 c
-c     call exit(1) rather than the bare `stop' the older refusals in this
-c     routine use. A bare stop exits 0, so a caller testing the status of a
-c     refused run cannot tell it from a successful one, which is the whole
-c     point here. The existing bare stops are deliberately left alone.
+c     call exit(1) rather than a bare `stop', and echo the message to unit 6
+c     as well as to the output file. A bare stop exits 0, so a caller testing
+c     the status of a refused run cannot tell it from a successful one, and a
+c     message written only to the output file is invisible to anyone running a
+c     batch. v1.1 did this here and nowhere else; v1.2 did it everywhere, so
+c     the normal end of the main program is now the only exit-0 path.
 c
       if(icoord.gt.lcoord) then
       write(8,651) icoord,lcoord
@@ -577,8 +589,9 @@ c
       if(unit.ne.'au'.and.unit.ne.'ang') then
       write(8,610)
   610 format(1x,'units not specified')
+      write(6,610)
       close (8)
-      stop
+      call exit(1)
       endif
 c
       read(9,*) correct
@@ -595,8 +608,9 @@ c
      ?.ne.'none') then
       write (8,632)
   632 format(1x,'charge distribution not specified')
+      write (6,632)
       close (8)
-      stop
+      call exit(1)
       endif
 c
       tcharge=0.d0
@@ -939,8 +953,9 @@ c
      ?' (mass key',i4,').'/
      ?1x,'element keys are nint(atomic weight); defined keys:'/
      ?1x,'1,12,14,16,19,23,28,31,32,35,56,80,127')
+      write(6,602) iatom,imass(iatom)
       close (8)
-      stop
+      call exit(1)
       endif
 c
   603 format(1x,'WARNING: provisional parameter used for atom',i4,
@@ -1611,7 +1626,22 @@ c
       if(ip.eq.1) write(8,102)
   102 format()
       ifailc=ifailc+1
-      if(ifailc.eq.ifail) stop
+      if(ifailc.eq.ifail) then
+c
+c     The cap on energy-non-conserving trajectories. Reaching it abandons the
+c     calculation, and until v1.2 it did so with a bare stop and no message of
+c     its own -- after MOBIL4 had already printed a PA and an EHS cross
+c     section, so from the outside the run looked like a successful one that
+c     happened to end early. Say what happened, on both units, and exit
+c     nonzero.
+c
+      write(8,110) ifail
+  110 format(/1x,'ERROR: ',i5,' trajectories failed to conserve',
+     ?' energy to within 1%; abandoning the calculation.')
+      write(6,110) ifail
+      close (8)
+      call exit(1)
+      endif
       return
 c       
 c
@@ -1833,8 +1863,9 @@ c
       write(8,602) iatom,fx(iatom),fy(iatom),fz(iatom),hold
   602 format(1x,i4,5x,1pe11.4,3(5x,e11.4))
  1001 continue     
+      write(6,601)
       close (8)
-      stop
+      call exit(1)
       endif
 c
 c     determine rmax, emax, and r00 along x, y, and z directions
@@ -1971,8 +2002,9 @@ c
       if(ibst.gt.500) then
       write(8,653)
   653 format(1x,'ibst greater than 500')
+      write(6,653)
       close (8)
-      stop     
+      call exit(1)
       endif
       goto 3000
  3020 b2max(ig)=dfloat(ibst-5)*dbst2
@@ -2816,8 +2848,9 @@ c
       if(mx.ne.m2) then
       write(8,624)
   624 format(1x,'masses do not add up')
+      write(6,624)
       close (8)
-      stop
+      call exit(1)
       endif
 c
       do 2030 iatom=1,inatom

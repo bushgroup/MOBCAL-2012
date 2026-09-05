@@ -3,6 +3,78 @@
 All notable changes to MOBCAL-2012. Versions are two-component, matching the
 repository's tags; `v2.0` is reserved for the first breaking change.
 
+## [1.2] — Unreleased
+
+### Added
+
++ **`test/refusals.sh`**, a fourth gate, seconds on both gases. It drives every
+  termination a small input can reach — five cases on helium, four on nitrogen,
+  one of them through a probe that calls the coordinate-reading subroutines
+  directly — and requires each to exit nonzero with its message in the output
+  file and on the console. It also reads each source and requires that exactly
+  one bare `stop` survives and that it is the one in the main program, which is
+  what covers the two terminations no input can reach. Run against the v1.1
+  sources it fails 23 of its 50 assertions.
++ **`test/probe-driver.sh`**, the generated test driver that stands in for the
+  main program, moved out of `test/elements.sh` so that both gates that need it
+  share one copy rather than each carrying its own.
+
+### Changed
+
++ **Every termination except the normal end of the program now exits 1**, and
+  writes its reason to the console as well as to the output file. Through v1.1
+  all but the two array-bound refusals ended in a bare Fortran `stop`, which
+  exits 0, so a run that refused its input and a run that produced a cross
+  section were indistinguishable to whatever launched them. Seven sites changed
+  in `mobcal_He.f` and six in `mobcal_N2.f`: the `units`, charge-mode,
+  undefined-element and conformer-composition refusals, the cap on trajectories
+  that fail to conserve energy, and the two internal consistency checks in
+  `MOBIL2`. No message text changed, and no line of `sample-output/` moved.
+
+  **The case this matters most for is not a refusal.** The energy-conservation
+  cap is reached inside the trajectory calculation, after the
+  projection-approximation and exact-hard-sphere cross sections have already
+  been written to the output file. A helium run that hit it left two cross
+  sections behind, formatted exactly as a real result, and reported success.
+  Nothing in the output file said otherwise, and nothing still does — the exit
+  status is what says it.
+
+  A run that produces a cross section still exits 0, so a script that ignored
+  the status and read a number out of the output file is unaffected. A script
+  that treated a nonzero status as a crash will now see the refusals it was
+  previously blind to.
+
+### Fixed
+
++ **The shipped run no longer overwrites itself between gases.** `mobcal.in`
+  named a fixed input file, `Choline.mfj`, and a fixed output file,
+  `temp.choline.n2.out` — one name written by both `mHe` and `mN2`, so a helium
+  run and a nitrogen run in the same directory silently overwrote each other's
+  output. There is no longer one shipped `mobcal.in`; instead `mobcal_He.in`
+  and `mobcal_N2.in` each name `Choline.mfj` at the same seed and write to
+  `Choline_He.out` / `Choline_N2.out` respectively, so both can be run in one
+  directory without collision. The program still reads a fixed `mobcal.in`, so
+  running either gas means copying the matching template over that name first
+  — `README.md`, `docs/getting-started.md`, `sample-output/README.md` and
+  `CLAUDE.md` all now say so. No gate reads the shipped file, so no gate's
+  behaviour changes.
+
++ **The CI line-ending check named a file that no longer exists.** It listed
+  `mobcal.in`, which this release replaced with one template per gas, so that
+  one entry checked nothing. It now names `mobcal_He.in` and `mobcal_N2.in`.
+
+### Documentation
+
++ **The six chunk-4 elements' integer masses are now stated as a decision, not
+  left silent.** `docs/parameters.md` *Atomic masses* and one `README.md`
+  sentence say that chlorine, bromine, iodine, lithium, potassium and caesium
+  carry the integer mass key itself rather than a four-figure atomic weight,
+  that this matches the contributor's own distributed files, and the size of
+  what it costs: a worst-case shift in the reduced mass μ of +0.0024 %/+0.014 %
+  (He/N2) for iodine and +0.0020 %/+0.012 % for caesium, for a light ion whose
+  mass is essentially the one heavy atom. No code changed and nothing
+  regenerated.
+
 ## [1.1] — 2026-08-25
 
 The physics is untouched. Every cross section this release computes for an input
@@ -153,35 +225,6 @@ lines and touches `Choline_He.out` only:
 `Choline_N2.out` does not move: nitrogen's table did not change. Choline
 contains no phosphorus and no halogen, so neither element warning appears in
 either reference.
-
-## [1.2] — Unreleased
-
-### Fixed
-
-+ **The shipped run no longer overwrites itself between gases.** `mobcal.in`
-  named a fixed input file, `Choline.mfj`, and a fixed output file,
-  `temp.choline.n2.out` — one name written by both `mHe` and `mN2`, so a helium
-  run and a nitrogen run in the same directory silently overwrote each other's
-  output. There is no longer one shipped `mobcal.in`; instead `mobcal_He.in`
-  and `mobcal_N2.in` each name `Choline.mfj` at the same seed and write to
-  `Choline_He.out` / `Choline_N2.out` respectively, so both can be run in one
-  directory without collision. The program still reads a fixed `mobcal.in`, so
-  running either gas means copying the matching template over that name first
-  — `README.md`, `docs/getting-started.md`, `sample-output/README.md` and
-  `CLAUDE.md` all now say so. No gate reads the shipped file, so no gate's
-  behaviour changes.
-
-### Documentation
-
-+ **The six chunk-4 elements' integer masses are now stated as a decision, not
-  left silent.** `docs/parameters.md` *Atomic masses* and one `README.md`
-  sentence say that chlorine, bromine, iodine, lithium, potassium and caesium
-  carry the integer mass key itself rather than a four-figure atomic weight,
-  that this matches the contributor's own distributed files, and the size of
-  what it costs: a worst-case shift in the reduced mass μ of +0.0024 %/+0.014 %
-  (He/N2) for iodine and +0.0020 %/+0.012 % for caesium, for a light ion whose
-  mass is essentially the one heavy atom. No code changed and nothing
-  regenerated.
 
 ## [1.0] — 2012
 

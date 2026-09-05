@@ -1,9 +1,11 @@
-# Scratch directories the three gates build and run in. test/_bounds also holds
-# the generated over-bound inputs, and test/_elements the generated probe
-# driver -- fixtures the gates write rather than files anybody edits.
+# Scratch directories the four gates build and run in. test/_bounds also holds
+# the generated over-bound inputs, and test/_elements and test/_refusals the
+# generated probe driver and fixtures -- files the gates write rather than
+# files anybody edits.
 test/_work/
 test/_bounds/
 test/_elements/
+test/_refusals/
 
 # Compiler and run leftovers, wherever they land.
 *.exe

@@ -46,18 +46,20 @@
 # these cases are what keep it holding.
 #
 #
-# THE EXIT STATUS, WHICH IS A DELIBERATE INCONSISTENCY
+# THE EXIT STATUS
 #
 # A bare Fortran `stop' exits 0. Every refusal this code shipped with -- eight
-# bare stops in mobcal_He.f, including "units not specified", "charge
-# distribution not specified" and "type not defined for atom number" -- reports
-# success to its caller. The two new bound refusals use `call exit(1)' instead,
-# because a refusal a script cannot detect is not much of a refusal.
+# terminations in mobcal_He.f, including "units not specified", "charge
+# distribution not specified" and "type not defined for atom number" -- reported
+# success to its caller. The two bound refusals v1.1 added used `call exit(1)'
+# instead, because a refusal a script cannot detect is not much of a refusal.
 #
-# The older eight are deliberately left alone, so this repository currently has
-# refusals of both kinds. The boundary case below is the one that shows it: it
-# ends in the pre-existing charge-distribution refusal and therefore asserts an
-# exit status of 0, which is not a mistake in the test.
+# For one release those were the only two, and the boundary case below asserted
+# an exit status of 0 because it lands on the pre-existing charge-distribution
+# refusal. v1.2 converted the rest, so that assertion is now nonzero and the
+# only exit-0 path in either file is the normal end of the main program.
+# test/refusals.sh is the gate for that; this one only has to stay consistent
+# with it.
 
 set -eu
 
@@ -279,10 +281,13 @@ for gas in $GASES; do
                   "$(absent 'ERROR' "$O")"
             check "execution reached the charge-distribution refusal" \
                   "$(present 'charge distribution not specified' "$O")"
-            # Exit 0 is correct here and is not a typo: see the header. The
-            # pre-existing refusal this case lands on is a bare Fortran stop.
-            check "exit status is 0 (pre-existing bare stop)" \
-                  "$(status "$st" 0)"
+            # Nonzero since v1.2. Through v1.1 the refusal this case lands on
+            # was a bare Fortran stop and this assertion read `exit status is
+            # 0'. Same refusal, same input, same message -- only the status
+            # changed, and the boundary case is still about the two guards
+            # above it rather than about that refusal.
+            check "exit status is nonzero (the refusal reaches the caller)" \
+                  "$(nonzero "$st")"
             ;;
         esac
     done

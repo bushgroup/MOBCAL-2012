@@ -37,9 +37,10 @@ Lines 1, 4 and 5 are read with a fixed-width `a30` edit descriptor
   trim the longer one. A stray leading space on line 4 or line 5 makes the
   unit or charge-mode check fail silently into the generic refusal (`units
   not specified` / `charge distribution not specified`,
-  `mobcal_He.f:574-579,591-597`) — a bare `stop`, so it exits status 0. If a
-  run "does nothing" and the output file is only a few lines long, check for
-  a leading space first.
+  `mobcal_He.f:589-595,607-614`). Since v1.2 that refusal reaches the console
+  and exits 1; through v1.1 it was a bare `stop`, printing nothing to the
+  terminal and exiting 0. If an older run "does nothing" and the output file
+  is only a few lines long, check for a leading space first.
 - **Content past column 30 is discarded**, not an error. Keep the label
   short.
 

@@ -98,7 +98,9 @@ common case.
   `README.md`.
 + Supports the elements listed in *Supported elements* in `README.md`, and
   refuses cleanly, naming what it needs, if your input uses one it doesn't
-  know.
+  know. Every refusal writes its reason to the console as well as to the
+  output file and exits with status 1, so a batch script can tell a refused
+  run from one that produced a number -- see *Exit status* in `README.md`.
 
 ## References
 

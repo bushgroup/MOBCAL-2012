@@ -32,7 +32,7 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 + `docs/getting-started.md` An in-repository refresh of the original emailed guide, `N2_Mobcal_Getting_Started.pdf`
 + `docs/mfj-format.md` The `.mfj` input format precisely: every line, the element-key convention, and the charge-mode differences between the two gases
 + `docs/parameters.md` Where every Lennard-Jones and hard-sphere parameter in both tables came from, with the arithmetic to re-derive each one
-+ `tools/xyz2mfj.py` Optional, dependency-free converter from plain XYZ coordinates to a `.mfj` file. Not part of the build and not covered by the three gates
++ `tools/xyz2mfj.py` Optional, dependency-free converter from plain XYZ coordinates to a `.mfj` file. Not part of the build and not covered by the four gates
 
 The two files under `sample-output/` are also the fixtures the regression gate
 compares against, so they are reference data and not just examples. They are the
@@ -44,19 +44,21 @@ stochastic diagnostic, is unchanged from the published files.
 ### Repository
 + `LICENSE` GNU General Public License, version 3
 + `CHANGELOG.md` What changed in each release, and for the one release that regenerated the reference outputs, exactly which lines moved
-+ `CLAUDE.md` Contributor notes: the three gates, line endings, and build flags
++ `CLAUDE.md` Contributor notes: the four gates, line endings, and build flags
 + `test/regression.sh` Regression gate. Builds both sources, runs `Choline.mfj` at the seed recorded in the reference outputs, and compares the result against `sample-output/`
 + `test/bounds.sh` Array-bound gate. Checks that an input exceeding either compiled-in limit is refused with a message naming the limit and the actual count, and exits nonzero
 + `test/elements.sh` Element-table gate. Builds a probe against the real coordinate-reading subroutines and checks that every atom gets the same Lennard-Jones and hard-sphere parameters in every coordinate set
++ `test/refusals.sh` Exit-status gate. Checks that every refusal and every detected failure exits nonzero, with its message on the console as well as in the output file, and that the normal end of the main program is the only bare Fortran `stop` left in either source
++ `test/probe-driver.sh` The generated test driver that calls the coordinate-reading subroutines directly, in the one place it is written down. Sourced by the element-table and exit-status gates
 + `test/silicon-2conf.mfj` The element gate's input: two identical coordinate sets containing silicon
 + `test/new-elements-he.mfj`, `test/new-elements-n2.mfj` The element gate's inputs for the elements added in v1.1 -- see *Supported elements* below
-+ `test/build-flags.sh` The build recipe, in the one place it is written down. Sourced by all three gates
++ `test/build-flags.sh` The build recipe, in the one place it is written down. Sourced by all four gates
 + `test/stochastic-lines.txt` Output lines excluded from the exact comparison because they depend on the pseudo-random number stream
 + `test/strict-platforms` Platforms on which whole-file byte identity is a gating check rather than a reported one
-+ `.github/workflows/ci.yml` Runs all three gates on Linux, macOS, and Windows, one job per platform and gas
++ `.github/workflows/ci.yml` Runs all four gates on Linux, macOS, and Windows, one job per platform and gas
 + `.githooks/commit-msg` Normalizes the AI-assistance attribution trailer. Enable it once per clone with `git config core.hooksPath .githooks`
 + `.gitattributes` Pins line endings to LF, in the repository and in the working tree, so the byte comparison means the same thing on every platform
-+ `.gitignore` Build products and the scratch directories the three gates run in
++ `.gitignore` Build products and the scratch directories the four gates run in
 
 ## Environment
 All results in [1] were calculated by Iain Campuzano in a Linux environment. The code
@@ -91,7 +93,7 @@ nothing to install.
 
 **These are the flags the continuous-integration matrix uses** — three platforms,
 both gases, compared against the reference outputs under `sample-output/`.
-`test/build-flags.sh` holds the authoritative copy, and all three gates source it; if
+`test/build-flags.sh` holds the authoritative copy, and all four gates source it; if
 you change the flags in one place, change them in the other.
 
 Earlier versions of this file recommended `g77` and advised against optimization
@@ -267,6 +269,19 @@ table was written out twice and the second copy gave silicon iron's values, so a
 multi-conformer run containing silicon silently changed parameters after the
 first conformer.
 
+A fourth gate, seconds again, checks that a run which refused its input or
+abandoned its calculation says so with a nonzero exit status:
+
+```sh
+sh test/refusals.sh --gas he
+```
+
+It drives every such termination a small input can reach and requires each to
+exit nonzero with its message on the console as well as in the output file. It
+also reads the source directly and requires that exactly one bare Fortran `stop`
+survives in each file — the normal end of the main program — which is what
+covers the two terminations no input can reach. See *Exit status* below.
+
 ### Tested compilers
 
 | platform | compiler |
@@ -289,7 +304,8 @@ cp mobcal_He.in mobcal.in
 ```
 
 The program takes no arguments, and prints nothing to the console unless it
-refuses the input — everything else goes to the output file. It reads
+refuses the input or abandons the calculation — everything else goes to the
+output file. It reads
 `mobcal.in` from the current directory under that fixed name, which names
 three things on three lines: the `.mfj` input file, the output file to write,
 and the random-number seed. There is no single shipped `mobcal.in`, because the
@@ -318,6 +334,38 @@ differ from a plain `diff`, and none of the three is physics:
 `test/regression.sh` stages the input under the name the reference records and
 normalizes the other two before comparing, which is why *Checking your build*
 above recommends that script over `diff`. `CLAUDE.md` documents all three.
+
+### Exit status
+
+A run that produced a cross section exits **0**. Every other termination exits
+**1** and writes its reason to the console as well as to the output file, so a
+script can tell the two apart without parsing anything:
+
+```sh
+cp mobcal_He.in mobcal.in
+if ./mHe; then echo "ok"; else echo "refused or abandoned"; fi
+```
+
+That covers refusals — an unrecognized `units` or charge keyword, an element the
+table does not define, an input past either array bound, a conformer whose
+composition does not match the first one's — and it covers the failures the
+program detects in its own arithmetic, chiefly the cap on trajectories that do
+not conserve energy to within 1 %. That cap is a helium-build behaviour: the
+same check exists in `mobcal_N2.f` but is commented out in the source as it
+shipped, so a nitrogen run neither counts nor reports non-conserving
+trajectories. Nothing in v1.2 changed that either way.
+
+**This changed in v1.2, and the change matters most for the last case.** Through
+v1.1 all but the two array-bound refusals ended in a bare Fortran `stop`, which
+exits 0. The energy-conservation cap is reached inside the trajectory
+calculation, *after* the projection-approximation and exact-hard-sphere cross
+sections have already been written to the output file. So a helium run that
+abandoned its trajectory calculation left two cross sections behind, formatted
+exactly as a real result, and reported success. Nothing in the output file said
+otherwise, and nothing still does — the exit status is what says it.
+
+If you are checking older output files by hand rather than by status: a run that
+finished has a `SUMMARY` block at the end. One that did not, does not.
 
 ### Which version produced an output file
 
@@ -426,8 +474,9 @@ what `test/elements.sh` runs both warnings against.
 | coordinate sets (conformers) per input file | 100 |
 
 An input exceeding either limit is refused, with a message naming the limit and
-the count you gave, and the program exits with a nonzero status. It does not
-attempt a partial calculation.
+the count you gave, on the console as well as in the output file, and the
+program exits with a nonzero status. It does not attempt a partial calculation.
+Every other refusal behaves the same way — see *Exit status* above.
 
 **Validated to 1,000 atoms — above that you are the first.** Both limits are set
 by one line each in `mobcal_limits.inc`, so raising one is a single edit and a
