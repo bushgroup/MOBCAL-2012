@@ -208,6 +208,32 @@ borrowed hard-sphere radius, so the hard sphere sits inside the Lennard-Jones
 well. Harmless for the trajectory method, which never reads `rhs`; a real hazard
 for EHSS/PA, which only helium computes.
 
+## Atomic masses
+
+The mass key (`nint` of atomic weight, looked up as `xmass(iatom)`) is a
+four-figure atomic weight for every legacy row and for phosphorus. The six
+elements v1.1 merged from Iain Campuzano's files carry the integer key itself
+as the mass instead: chlorine 35.00 (35.45), bromine 80.00 (79.90), iodine
+127.00 (126.90), lithium 7.00 (6.94), potassium 39.00 (39.10), caesium 133.00
+(132.91). **This is deliberate.** Iain's distributed files carry the same
+integers, and correcting them here would make this repository's numbers
+disagree with his builds for exactly the ions these six rows were added to
+describe.
+
+The mass feeds the reduced mass μ = m1·m2/(m1+m2) (`mu` in COMMON
+`constants`), which the trajectory integration and the cross-section-to-mobility
+conversion both use directly, so the discrepancy reaches every reported value
+for an ion carrying one of these six atoms. The cost is small. Worst case is a
+light ion whose mass is essentially the one heavy atom — a bare iodine or
+caesium cation, the small end of the CsI cluster series used as an ESI
+calibrant is exactly this case for caesium. There, the integer key shifts μ by
++0.0024 % in helium / +0.014 % in nitrogen for iodine, and +0.0020 % / +0.012 %
+for caesium; any additional atoms in a real molecule only dilute the fraction
+further, since only the one atom's mass is wrong. That is well under the
+uncertainty already carried by these same rows' provisional 0.80 scaling
+factor (`mobcal_He.f`'s three halogens and phosphorus), and not worth breaking
+agreement with the contributor's own files to correct.
+
 ## Adding an element
 
 One row in `ljparm` per gas — `mobcal_He.f:714`, `mobcal_N2.f:721` — and one

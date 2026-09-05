@@ -171,6 +171,18 @@ either reference.
   `CLAUDE.md` all now say so. No gate reads the shipped file, so no gate's
   behaviour changes.
 
+### Documentation
+
++ **The six chunk-4 elements' integer masses are now stated as a decision, not
+  left silent.** `docs/parameters.md` *Atomic masses* and one `README.md`
+  sentence say that chlorine, bromine, iodine, lithium, potassium and caesium
+  carry the integer mass key itself rather than a four-figure atomic weight,
+  that this matches the contributor's own distributed files, and the size of
+  what it costs: a worst-case shift in the reduced mass μ of +0.0024 %/+0.014 %
+  (He/N2) for iodine and +0.0020 %/+0.012 % for caesium, for a light ion whose
+  mass is essentially the one heavy atom. No code changed and nothing
+  regenerated.
+
 ## [1.0] — 2012
 
 The code as published with Campuzano, I. D. G.; Bush, M. F.; Robinson, C. V.;

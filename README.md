@@ -357,6 +357,10 @@ Each atom in an input file is identified by an integer mass key --
 `nint` of its atomic weight -- looked up in a table in the source. An
 unrecognized key is refused, naming the atom, the key you gave, the
 `nint(atomic weight)` convention, and the keys the build actually knows.
+Chlorine, bromine, iodine, lithium, potassium and caesium carry that key
+itself as the stored atomic mass rather than a four-figure weight, on purpose,
+to match the contributor's own files -- `docs/parameters.md` *Atomic masses*
+has the reasoning and its (small) cost.
 
 | gas | parameter set | defined keys (`nint` of atomic weight) |
 |---|---|---|
