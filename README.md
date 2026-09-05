@@ -23,7 +23,7 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 + `mobcal_N2.f` Fortran 77 source code
 + `mobcal_limits.inc` The compiled-in array bounds, included by both sources. **Required to compile**, and the one file to edit if you need larger limits
 + `mobcal_version.inc` The release version of the code, included by both sources. **Required to compile**
-+ `mobcal.in` Parameter file. Sets input file name, output file name, and random number seed
++ `mobcal_He.in`, `mobcal_N2.in` Parameter files, one per gas. Each sets the input file name, the output file name, and the random-number seed; copy the one for your gas to `mobcal.in` before running, since the program always reads that fixed name
 + `Choline.mfj` Input file used for choline in [1]
 + `sample-output/Choline_He.out` Output file for choline in He gas
 + `sample-output/Choline_N2.out` Output file for choline in N2 gas
@@ -225,7 +225,7 @@ Three conclusions:
 
 ### Checking your build
 
-With the provided `mobcal.in` and `Choline.mfj`, helium should report
+With `mobcal_He.in` copied to `mobcal.in` and the provided `Choline.mfj`, helium should report
 
 ```
  average TM cross section = 5.5402E+01
@@ -284,23 +284,28 @@ numbers line for line, and the v1.1 regeneration reproduced every one of them.
 ## Run the compiled code
 
 ```sh
+cp mobcal_He.in mobcal.in
 ./mHe
 ```
 
 The program takes no arguments, and prints nothing to the console unless it
 refuses the input — everything else goes to the output file. It reads
-`mobcal.in` from the current directory, which names three things on three
-lines: the `.mfj` input file, the output file to write, and the random-number
-seed. The copy shipped here runs `Choline.mfj` at the seed the published output
-used, and writes `temp.choline.n2.out` — one name used by both gases, so a
-helium run and a nitrogen run in the same directory overwrite each other unless
-you change that second line.
+`mobcal.in` from the current directory under that fixed name, which names
+three things on three lines: the `.mfj` input file, the output file to write,
+and the random-number seed. There is no single shipped `mobcal.in`, because the
+program's own fixed filename would otherwise make a helium run and a nitrogen
+run in the same directory overwrite each other's output; instead there is one
+template per gas, `mobcal_He.in` and `mobcal_N2.in`, and you copy the one you
+want to `mobcal.in` before running. Both name `Choline.mfj` at the seed the
+published output used, and write to `Choline_He.out` / `Choline_N2.out`
+respectively, so both can be run in the same directory without either
+overwriting the other.
 
-With `mobcal.in` unmodified, `./mHe` reproduces every number in
-`sample-output/Choline_He.out` and `./mN2` every number in
-`sample-output/Choline_N2.out`, down to the stochastic diagnostics and the
-standard deviation. Three lines nevertheless differ from a plain `diff`, and
-none of the three is physics:
+With `mobcal_He.in` copied to `mobcal.in`, `./mHe` reproduces every number in
+`sample-output/Choline_He.out`; with `mobcal_N2.in` copied over it, `./mN2`
+reproduces every number in `sample-output/Choline_N2.out` — down to the
+stochastic diagnostics and the standard deviation. Three lines nevertheless
+differ from a plain `diff`, and none of the three is physics:
 
 + **The echoed `input file name`.** The reference files were produced from a
   file named `Choline_pop.mfj`; this repository ships the same coordinates as

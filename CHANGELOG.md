@@ -154,6 +154,23 @@ lines and touches `Choline_He.out` only:
 contains no phosphorus and no halogen, so neither element warning appears in
 either reference.
 
+## [1.2] — Unreleased
+
+### Fixed
+
++ **The shipped run no longer overwrites itself between gases.** `mobcal.in`
+  named a fixed input file, `Choline.mfj`, and a fixed output file,
+  `temp.choline.n2.out` — one name written by both `mHe` and `mN2`, so a helium
+  run and a nitrogen run in the same directory silently overwrote each other's
+  output. There is no longer one shipped `mobcal.in`; instead `mobcal_He.in`
+  and `mobcal_N2.in` each name `Choline.mfj` at the same seed and write to
+  `Choline_He.out` / `Choline_N2.out` respectively, so both can be run in one
+  directory without collision. The program still reads a fixed `mobcal.in`, so
+  running either gas means copying the matching template over that name first
+  — `README.md`, `docs/getting-started.md`, `sample-output/README.md` and
+  `CLAUDE.md` all now say so. No gate reads the shipped file, so no gate's
+  behaviour changes.
+
 ## [1.0] — 2012
 
 The code as published with Campuzano, I. D. G.; Bush, M. F.; Robinson, C. V.;

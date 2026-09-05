@@ -633,9 +633,10 @@ echo the name of the file they were run on, twice, and that name is
 as `Choline.mfj`. So `test/regression.sh` copies the input to the name it reads
 out of the reference before running, rather than editing either side of the
 comparison. The consequence is worth stating in the contributor notes because it
-surprises anyone checking a build by hand: a user who runs the shipped
-`mobcal.in` directly and diffs the result gets one differing field, twice, on
-top of the two rules above — and it is the echoed filename, not a number.
+surprises anyone checking a build by hand: a user who copies one of the shipped
+`mobcal_He.in` / `mobcal_N2.in` templates to `mobcal.in`, runs it directly, and
+diffs the result gets one differing field, twice, on top of the two rules
+above — and it is the echoed filename, not a number.
 Chunk 7 measured exactly that from a clean clone, and `README.md`'s *Run the
 compiled code* now names all three differences instead of promising an exact
 match.

@@ -15,3 +15,10 @@ mobcal_n2
 # The program writes these to the current directory under fixed names.
 hold
 temp.out
+
+# A user's working copy of one of the two shipped mobcal_He.in / mobcal_N2.in
+# templates, and the outputs they name -- anchored to the root so the
+# committed sample-output/ files of the same name are untouched.
+/mobcal.in
+/Choline_He.out
+/Choline_N2.out
