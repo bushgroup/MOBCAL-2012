@@ -89,9 +89,10 @@ jobs:
           bad=0
           for f in mobcal_He.f mobcal_N2.f \
                    mobcal_limits.inc mobcal_version.inc \
-                   Choline.mfj mobcal.in \
+                   Choline.mfj mobcal_He.in mobcal_N2.in \
                    sample-output/Choline_He.out sample-output/Choline_N2.out \
                    test/regression.sh test/bounds.sh test/elements.sh \
+                   test/refusals.sh test/probe-driver.sh \
                    test/build-flags.sh test/silicon-2conf.mfj \
                    test/new-elements-he.mfj test/new-elements-n2.mfj; do
             if LC_ALL=C grep -q "$(printf '\r')" "$f"; then
@@ -144,6 +145,18 @@ jobs:
           FC: ${{ steps.fortran.outputs.fc }}
         run: sh test/elements.sh --gas ${{ matrix.gas }} --keep
 
+      # Seconds as well, and before the regression gate for the same reason
+      # the other two fast gates are: every case is designed to terminate in
+      # under a second. Three refuse the input outright, one abandons the
+      # trajectory calculation on a deliberately tiny ion, and one calls the
+      # coordinate-reading subroutines directly rather than paying for the
+      # conformer that would otherwise have to run to completion first.
+      - name: Run the exit-status gate
+        shell: bash
+        env:
+          FC: ${{ steps.fortran.outputs.fc }}
+        run: sh test/refusals.sh --gas ${{ matrix.gas }} --keep
+
       - name: Run the regression gate
         shell: bash
         env:
@@ -171,5 +184,10 @@ jobs:
             test/_elements/**/*.stdout
             test/_elements/**/ljprobe.f
             test/_elements/**/build.log
+            test/_refusals/**/*.out
+            test/_refusals/**/*.dat
+            test/_refusals/**/*.stdout
+            test/_refusals/**/*.mfj
+            test/_refusals/**/build.log
           if-no-files-found: warn
           retention-days: 14

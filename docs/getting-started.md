@@ -12,8 +12,9 @@ instead of drifting out of sync with them.
 + `mobcal_He.f`, `mobcal_N2.f` — the two Fortran 77 sources (He and N2 gas)
 + `mobcal_limits.inc`, `mobcal_version.inc` — included by both, required to
   compile
-+ `mobcal.in` — names the input file, the output file, and the random-number
-  seed for one run
++ `mobcal_He.in`, `mobcal_N2.in` — one template per gas, each naming the input
+  file, the output file, and the random-number seed for one run; copy the one
+  you want to `mobcal.in`, the fixed name the program reads
 + `Choline.mfj` — the choline input used in the 2012 paper, and the shipped
   example of the `.mfj` format
 + `sample-output/Choline_He.out`, `sample-output/Choline_N2.out` — the
@@ -56,17 +57,23 @@ gfortran -O3 -fno-automatic -std=legacy -o mN2 mobcal_N2.f
 ## Running
 
 ```sh
+cp mobcal_He.in mobcal.in
 ./mHe
 ```
 
-reads `mobcal.in` from the current directory, which in turn names the
-`.mfj` input file, the output file, and the random-number seed. With the
-`mobcal.in` and `Choline.mfj` shipped in this repository, `mHe` reproduces
-every number in `sample-output/Choline_He.out` and `mN2` every number in
-`sample-output/Choline_N2.out`. Three lines still differ from a plain `diff`
+reads `mobcal.in` from the current directory under that fixed name, which in
+turn names the `.mfj` input file, the output file, and the random-number seed.
+There is one template per gas rather than one shared `mobcal.in`, since the
+program's fixed filename would otherwise make a helium and a nitrogen run in
+the same directory overwrite each other's output — copy `mobcal_He.in` or
+`mobcal_N2.in` to `mobcal.in` first. With the copy and `Choline.mfj` shipped in
+this repository, `mHe` reproduces every number in
+`sample-output/Choline_He.out` and `mN2` (after copying `mobcal_N2.in`
+instead) every number in `sample-output/Choline_N2.out`. Two lines still
+differ from a plain `diff`
 — the echoed input file name, which the 2012 references took from a file
-called `Choline_pop.mfj`, and two formatting spellings — so check with `sh
-test/regression.sh`, which accounts for all three. *Run the compiled code*
+called `Choline_pop.mfj`, and the line terminator on Windows — so check with
+`sh test/regression.sh`, which accounts for both. *Run the compiled code*
 and *Checking your build* in `README.md` have the detail and the one-line
 cross-section values.
 
@@ -91,7 +98,9 @@ common case.
   `README.md`.
 + Supports the elements listed in *Supported elements* in `README.md`, and
   refuses cleanly, naming what it needs, if your input uses one it doesn't
-  know.
+  know. Every refusal writes its reason to the console as well as to the
+  output file and exits with status 1, so a batch script can tell a refused
+  run from one that produced a number -- see *Exit status* in `README.md`.
 
 ## References
 

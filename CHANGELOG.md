@@ -3,6 +3,130 @@
 All notable changes to MOBCAL-2012. Versions are two-component, matching the
 repository's tags; `v2.0` is reserved for the first breaking change.
 
+## [1.2] — Unreleased
+
+### Added
+
++ **`test/refusals.sh`**, a fourth gate, seconds on both gases. It drives every
+  termination a small input can reach — five cases on helium, four on nitrogen,
+  one of them through a probe that calls the coordinate-reading subroutines
+  directly — and requires each to exit nonzero with its message in the output
+  file and on the console. It also reads each source and requires that exactly
+  one bare `stop` survives and that it is the one in the main program, which is
+  what covers the two terminations no input can reach. Run against the v1.1
+  sources it fails 23 of its 50 assertions.
++ **`test/probe-driver.sh`**, the generated test driver that stands in for the
+  main program, moved out of `test/elements.sh` so that both gates that need it
+  share one copy rather than each carrying its own.
+
+### Changed
+
++ **Every termination except the normal end of the program now exits 1**, and
+  writes its reason to the console as well as to the output file. Through v1.1
+  all but the two array-bound refusals ended in a bare Fortran `stop`, which
+  exits 0, so a run that refused its input and a run that produced a cross
+  section were indistinguishable to whatever launched them. Seven sites changed
+  in `mobcal_He.f` and six in `mobcal_N2.f`: the `units`, charge-mode,
+  undefined-element and conformer-composition refusals, the cap on trajectories
+  that fail to conserve energy, and the two internal consistency checks in
+  `MOBIL2`. No message text changed, and no line of `sample-output/` moved.
+
+  **The case this matters most for is not a refusal.** The energy-conservation
+  cap is reached inside the trajectory calculation, after the
+  projection-approximation and exact-hard-sphere cross sections have already
+  been written to the output file. A helium run that hit it left two cross
+  sections behind, formatted exactly as a real result, and reported success.
+  Nothing in the output file said otherwise, and nothing still does — the exit
+  status is what says it.
+
+  A run that produces a cross section still exits 0, so a script that ignored
+  the status and read a number out of the output file is unaffected. A script
+  that treated a nonzero status as a crash will now see the refusals it was
+  previously blind to.
+
+### Fixed
+
++ **The shipped run no longer overwrites itself between gases.** `mobcal.in`
+  named a fixed input file, `Choline.mfj`, and a fixed output file,
+  `temp.choline.n2.out` — one name written by both `mHe` and `mN2`, so a helium
+  run and a nitrogen run in the same directory silently overwrote each other's
+  output. There is no longer one shipped `mobcal.in`; instead `mobcal_He.in`
+  and `mobcal_N2.in` each name `Choline.mfj` at the same seed and write to
+  `Choline_He.out` / `Choline_N2.out` respectively, so both can be run in one
+  directory without collision. The program still reads a fixed `mobcal.in`, so
+  running either gas means copying the matching template over that name first
+  — `README.md`, `docs/getting-started.md`, `sample-output/README.md` and
+  `CLAUDE.md` all now say so. No gate reads the shipped file, so no gate's
+  behaviour changes.
+
++ **The CI line-ending check named a file that no longer exists.** It listed
+  `mobcal.in`, which this release replaced with one template per gas, so that
+  one entry checked nothing. It now names `mobcal_He.in` and `mobcal_N2.in`.
+
++ **The `mass of ion` line now prints an `E` exponent, like every other value
+  in the file.** Format 604 was the one edit descriptor in either source that
+  asked for `1pd` rather than `1pe`, so `gfortran` wrote `1.0417D+02` where the
+  published `g77` output wrote `1.0417E+02` — the same value and the same
+  digits, a Fortran runtime formatting difference and not physics, but one more
+  line of a fresh run differing from the committed reference. Since v1.1
+  `test/regression.sh` had absorbed it by rewriting `D` to `E` on both sides of
+  every comparison. That rule is gone; stripping end-of-line CR is now the only
+  normalization the comparison applies, and a hand `diff` of a fresh run against
+  `sample-output/` shows two differences rather than three.
+
+  **`sample-output/` did not move.** The v1.1 regeneration committed output that
+  had already been through `normalize()`, so both references read `1.0417E+02`
+  before this change; correcting the descriptor made the program print what they
+  already held. `1pd11.4` and `1pe11.4` produce the same eleven characters but
+  for the letter, so the change is one line in each source file and nothing
+  else. `CLAUDE.md` said through v1.1 that this correction would cost a
+  regeneration of its own; it did not, and that note is corrected in the same
+  commit.
+
+  The evidence that the rule was live and was normalizing this line and no
+  other is the intermediate state, recorded here because it is the check to
+  repeat before anyone touches `normalize()` again: with the rule removed and
+  the descriptor still `1pd`, the helium gate fails T1 and T3 on the `mass of
+  ion` line alone and T2 does not move; with the descriptor corrected it passes
+  all three tiers against the untouched reference, on both gases and all three
+  platforms.
+
+### Documentation
+
++ **The six chunk-4 elements' integer masses are now stated as a decision, not
+  left silent.** `docs/parameters.md` *Atomic masses* and one `README.md`
+  sentence say that chlorine, bromine, iodine, lithium, potassium and caesium
+  carry the integer mass key itself rather than a four-figure atomic weight,
+  that this matches the contributor's own distributed files, and the size of
+  what it costs: a worst-case shift in the reduced mass μ of +0.0024 %/+0.014 %
+  (He/N2) for iodine and +0.0020 %/+0.012 % for caesium, for a light ion whose
+  mass is essentially the one heavy atom. No code changed and nothing
+  regenerated.
++ **`docs/` no longer cites the source by line number.** Of the 30 `file:line`
+  citations `docs/mfj-format.md` and `docs/parameters.md` carried, 22 pointed
+  at the wrong line, and two commits did all of it without changing the
+  behaviour of anything cited: one rewrote provenance *comments only* inside
+  the element tables, pushing everything below them down 22 lines in
+  `mobcal_He.f` and 46 in `mobcal_N2.f` — it edited `docs/mfj-format.md` in the
+  same breath, to add a *See also* bullet, without noticing that it had just
+  falsified nine of that file's references — and the other added one element
+  row. Every citation now names a subprogram plus a format label or a verbatim
+  statement (`ljparm`'s `itest.eq.0` arm, format 602), which no insertion can
+  move and which a reader can grep. The exit-status work above then tested that
+  in passing: it changed 55 lines in `mobcal_He.f` and 38 in `mobcal_N2.f`, and
+  all 45 anchors still resolved unedited. `CLAUDE.md` *How the documentation
+  cites the source* records the decision and the count behind it. One stale
+  `grep -n` transcript in `test/regression.sh` went the same way, to a `grep`
+  without `-n`.
++ **One ungated no-drift claim withdrawn.** `docs/mfj-format.md` said the list
+  of defined mass keys printed by format 602 "is generated from the build's
+  actual table, so it can't drift out of sync with what the code accepts". It
+  is a hardcoded string sitting below the rows; `test/elements.sh` checks that
+  the refusal fires and names the key, and `test/refusals.sh` checks that it
+  exits nonzero, but nothing compares the list against the rows. Both files'
+  lists are correct today, and *Adding an element* in `docs/parameters.md` now
+  carries the one command that shows it — labelled as the hand check it is.
+
 ## [1.1] — 2026-08-25
 
 The physics is untouched. Every cross section this release computes for an input

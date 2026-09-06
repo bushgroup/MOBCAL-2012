@@ -32,12 +32,13 @@ unit in text mode. No checkout setting can normalize a difference introduced
 after checkout, so `test/regression.sh` strips end-of-line CR itself and does not
 rely on git having done it.
 
-## The three gates
+## The four gates
 
 ```sh
 sh test/regression.sh              # both gases -- minutes for he, ~1 h for n2
 sh test/bounds.sh                  # both gases -- seconds
 sh test/elements.sh                # both gases -- seconds
+sh test/refusals.sh                # both gases -- seconds
 ```
 
 `test/regression.sh` is the physics gate: one valid input, compared against
@@ -46,12 +47,16 @@ whose expected result is a refusal, so there is nothing to compare against and
 nothing that runs long. `test/elements.sh` is the parameter gate: it links a
 probe against the real `fcoord` and `ncoord` and reads out what the element
 table actually set, which is the one thing no amount of comparing output files
-can show.
+can show. `test/refusals.sh` is the exit-status gate: it drives every
+termination a small input can reach and requires each to exit nonzero, and it
+reads the source itself to require that the normal end of the main program is
+the only bare `stop` left.
 
-They are separate scripts because those are three different shapes, and they
+They are separate scripts because those are four different shapes, and they
 share one build recipe — `test/build-flags.sh`, described under *Building*
-below. CI runs the two fast ones first, since a broken build or a broken guard
-should not cost an hour of n2 to discover.
+below. Two of them also share one test driver, `test/probe-driver.sh`. CI runs
+the three fast ones first, since a broken build or a broken guard should not
+cost an hour of n2 to discover.
 
 ## The regression gate
 
@@ -63,8 +68,8 @@ sh test/regression.sh --keep       # keep test/_work to inspect the diffs
 
 It builds both sources, runs `Choline.mfj` at the seed recorded in the reference
 outputs, and reports three tiers. `.github/workflows/ci.yml` runs this script,
-`test/bounds.sh` and `test/elements.sh` on ubuntu, macos and windows, one job
-per (platform, gas) pair.
+`test/bounds.sh`, `test/elements.sh` and `test/refusals.sh` on ubuntu, macos and
+windows, one job per (platform, gas) pair.
 
 | Tier | What it compares | Gating |
 |---|---|---|
@@ -117,7 +122,7 @@ more useful artifact.
 |---|---|
 | **over-atoms** `inatom` = `len`+1 | nonzero exit; the message names both numbers, in the output file *and* on the console; no cross section anywhere |
 | **over-coords** `icoord` = `lcoord`+1 | the same, plus that it refused before even reading the atom count |
-| **boundary** exactly `lcoord` and `len` | both counts accepted; no `ERROR`; execution reaches the pre-existing charge-distribution refusal |
+| **boundary** exactly `lcoord` and `len` | both counts accepted; no `ERROR`; execution reaches the pre-existing charge-distribution refusal, and exits nonzero |
 
 Three things about this that are easy to get wrong:
 
@@ -136,15 +141,22 @@ limit and then names a charge mode that does not exist. Passing both guards and
 landing on `charge distribution not specified` is the evidence that neither guard
 fired one early. It tests the guards and explicitly nothing past them.
 
-**The boundary case asserts exit status 0, and that is not a typo.** A bare
-Fortran `stop` exits 0, and every refusal this code shipped with is a bare stop —
-eight in `mobcal_He.f`, including `units not specified`, `charge distribution not
-specified` and `type not defined for atom number`. All eight report success to
-their caller. The two bound refusals added in v1.1 use `call exit(1)` instead,
-because a refusal a script cannot detect is not much of a refusal. The eight
-older ones were deliberately left alone, so the repository currently has refusals
-of both kinds; making them consistent is a change worth making on its own terms,
-not as a side effect of this one.
+**The boundary case asserted exit status 0 until v1.2, and that was not a
+typo.** A bare Fortran `stop` exits 0, and every refusal this code shipped with
+was one — eight terminations in `mobcal_He.f`, including `units not specified`,
+`charge distribution not specified` and `type not defined for atom number`, all
+of them reporting success to their caller. The two bound refusals added in v1.1
+used `call exit(1)` instead, because a refusal a script cannot detect is not
+much of a refusal, and the older ones were deliberately left alone: making them
+consistent was worth doing on its own terms rather than as a side effect of the
+bound check.
+
+v1.2 did it. The boundary case now asserts nonzero, because the
+charge-distribution refusal it lands on is one of the converted ones. Nothing
+else about the case changed — it is still evidence that neither bound guard
+fired one early, and the refusal it lands on is still the same refusal printing
+the same message. *The exit-status gate*, below, is where that conversion is
+actually gated.
 
 ## The element-table gate
 
@@ -178,6 +190,14 @@ subroutines from the real source file, and there is no second copy of the table
 anywhere in the test. It runs in milliseconds because nothing integrates a
 trajectory, which is what lets it run on all three CI platforms.
 
+**Since v1.2 the stripping and the driver live in `test/probe-driver.sh`**,
+because `test/refusals.sh` needs the same thing to reach `ncoord`'s `masses do
+not add up` without paying for the previous conformer's whole calculation. Two
+copies of a driver is how a driver drifts — the argument that put the build
+recipe in `test/build-flags.sh`. The one line of the driver that differs
+between the gases, the `common/constants/` continuation, is still lifted from
+the source under test rather than written down.
+
 **The fixture's two coordinate sets are identical on purpose.** That holds the
 geometry fixed, so the only thing that can differ between the sets is which
 table was consulted. Every atom must come out of set 2 with exactly the values
@@ -202,6 +222,92 @@ be asserted by *count* rather than by presence: nitrogen, oxygen and fluorine
 already borrow carbon's 2.7 Å hard-sphere radius, so a warning that fired on
 that value rather than on element identity would still pass a check that only
 asked "did it fire" — see *Chunk 4* below for the full reasoning.
+
+## The exit-status gate
+
+```sh
+sh test/refusals.sh                # both gases -- seconds
+sh test/refusals.sh --gas n2       # one gas
+sh test/refusals.sh --keep         # keep test/_refusals to read the outputs
+```
+
+A bare Fortran `stop` exits 0. Until v1.2 every termination in both sources was
+one, except the two array-bound refusals v1.1 added, so a run that refused its
+input and a run that computed a cross section were indistinguishable to the
+caller. v1.2 converted the rest; this gate is what keeps them converted. Run
+against the v1.1 sources it fails 23 of its 50 assertions.
+
+**The classification was the work, not the conversion.** `mobcal_He.f` has
+eight terminations and `mobcal_N2.f` seven, and they are three different kinds
+of thing:
+
+| Where | What | Kind |
+|---|---|---|
+| main program | the normal end | exits 0, and must keep doing so |
+| `fcoord` | `units not specified` | refusal, before any arithmetic |
+| `fcoord` | `charge distribution not specified` | refusal, before any arithmetic |
+| `ljparm` | `type not defined for atom number` | refusal, before any arithmetic |
+| `ncoord` | `masses do not add up` | refusal, but reached late — see below |
+| `gsang` | the `ifail` cap | failure, mid-calculation; He only |
+| `mobil2` | `Problem orientating along x axis` | failure, mid-calculation |
+| `mobil2` | `ibst greater than 500` | failure, mid-calculation |
+
+`mobcal_N2.f`'s energy-conservation block is commented out in the source as it
+shipped, which is why that file has seven and not eight. The gate asserts that
+it is *still* commented out rather than quietly running one case fewer there.
+
+Five things about this that are easy to get wrong:
+
+**The `ifail` cap is the case that justifies the change.** It sits in `gsang`,
+reached from `mobil2`'s impact-parameter search — and `mobil2` runs after
+`mobil4` has already written a PA and an EHS cross section to the output file.
+Measured on a water-sized fixture, pre-change: 0.87 s, 100 non-conserving
+trajectories, `average PA cross section = 2.4573E+01` and `average EHS cross
+section = 2.4582E+01` in the format a real run prints them, zero bytes on the
+console, exit 0. That is the hazard *The array-bound gate* describes for the
+unguarded bound, still live in a guarded build. The only thing in the output
+file that marks those numbers as belonging to an abandoned run is the *absence*
+of a SUMMARY block, which is what `README.md` *Exit status* tells anyone
+auditing pre-v1.2 files to look for, and which the gate asserts.
+
+**Two of the eight are not drivable, and the static check is what covers
+them.** `Problem orientating along x axis` fires only if a rotation fails to
+put the longest axis on x, and `ibst greater than 500` only if the
+impact-parameter search has not converged after 500 steps; neither is reachable
+by any small input. They were converted with the rest — a failure reporting
+success is the defect, and whose fault the failure is does not change that —
+and the gate covers them by reading the source instead: exactly one bare `stop`
+may survive per file, and its line number must be below the first `subroutine`,
+which is to say inside the main program. Verified by mutation: reverting the
+orientation site alone fails exactly those two assertions and nothing else.
+
+**`masses do not add up` costs a whole conformer through the real binary, so it
+goes through the probe.** `ncoord` is called from the main loop only after
+`mobil4` and `mobil2` have both finished on the conformer before it, and there
+is no cheap conformer: the trajectory counts are hardcoded, and an ion small
+enough to be quick is an ion whose trajectories stop conserving energy — which
+lands on the `ifail` cap instead. Measured, the smallest fixture that gets
+through conformer 1 at all is methane, at 61 s on He and 14 minutes on N2. So
+that one case calls the real `fcoord` and the real `ncoord` through
+`test/probe-driver.sh` in milliseconds, and it carries a control: the same
+fixture with the composition left alone must get through and dump both sets,
+because a guard that refused *every* multi-conformer file would satisfy the
+refusal assertions perfectly.
+
+**Every converted site also echoes to unit 6, and that is asserted
+separately.** A refusal that reaches only the output file is invisible to
+anyone running a batch and watching a terminal. The message texts are otherwise
+untouched — in particular no `ERROR:` prefix was added to the older ones, which
+is what keeps the boundary case's `absent 'ERROR'` assertion meaning what it
+meant. Verified by mutation: dropping one `write(6,...)` fails exactly one
+assertion, and no exit-status assertion moves.
+
+**The `ifail` case depends on trajectory arithmetic, which is admissible here
+for the same reason T3 is.** This code is byte-reproducible across the
+platforms in `test/strict-platforms`, so "the hundredth trajectory fails" is as
+portable a fact as any number it prints. If a platform ever disagrees this
+fails loudly, which is the right outcome: it would mean T3's premise had
+changed.
 
 ## The one element table
 
@@ -426,8 +532,8 @@ prints `1.0417D+02` for format 604. Committing that would have put a third kind
 of change into a diff whose whole value is being exactly the two changes it
 claims. So the new references are the fresh output passed through the gate's own
 normalization -- the same function both sides of every comparison go through --
-which keeps the published `E` spelling and leaves the D-to-E rule doing the work
-it was written for.
+which keeps the published `E` spelling and, until v1.2 retired that rule, left
+the D-to-E normalization doing the work it was written for.
 
 **The diff is the deliverable, and it was counted.** Helium: 84 changed lines,
 being 4 version lines (one added at the top, `program version` rewritten, one
@@ -447,6 +553,13 @@ of the six chunk-4 elements (chlorine 35.00 against 35.45, and five more), which
 are inconsistent with all ten legacy rows carrying real atomic weights to four
 significant figures. Neither touches choline, so neither needs this commit's
 regeneration and both can land on their own terms.
+
+**That paragraph was wrong about the first item, and this file repeated it for
+four chunks.** Correcting 604 moves no line at all. Committing `normalize()`d
+output here is exactly what left the references reading `E`, so the corrected
+program matches them unchanged; v1.2 did it in one line per source file and
+regenerated nothing. *The one normalization the comparison applies*, below, has
+the detail and the check that proves the rule was live.
 
 ## Chunk 8 -- where the parameters actually come from
 
@@ -502,8 +615,9 @@ things that look like defects, are, and must not be repaired.
 Two things chunk 8 deliberately did not do. It did not put `convr` on the helium
 halogen radii -- that would invent a parameterization nobody published and move
 published numbers. And it did not correct the four-significant-figure integer
-masses, format 604's `1pd`, or `conve`; each needs its own regeneration and none
-is settled by this reply.
+masses, format 604's `1pd`, or `conve`; none is settled by this reply. Two of
+the three still need their own regeneration. 604 turned out not to: v1.2
+corrected it and `sample-output/` did not move.
 
 One note for a future grep. `0.8602` still appears in six files, in every case
 withdrawing the claim rather than making it. The check is not that the string is
@@ -599,51 +713,127 @@ root and building the same source by absolute path from an unrelated working
 directory produce byte-identical binaries. `README.md`'s "one command per gas"
 still holds; what changed is that it now lists a required source file.
 
-## Two normalizations the comparison applies
+## The one normalization the comparison applies
 
-Both are narrow and both are needed to compare a gfortran build against the
-references published in 2012, which were produced with g77. Chunk 5 regenerated
-those files, but through this same normalization, so they still hold g77's
-spelling and both rules still apply.
+**End-of-line CR**, for the reason above, and needed to compare a gfortran build
+against the references published in 2012, which were produced with g77. Stripped
+only at end of line, never mid-line: the filename fields are blank-padded to 30
+columns by an `a30` edit descriptor, and those trailing blanks are real content.
 
-1. **End-of-line CR**, for the reason above. Stripped only at end of line, never
-   mid-line: the filename fields are blank-padded to 30 columns by an `a30` edit
-   descriptor, and those trailing blanks are real content.
+**There were two until v1.2.** The second rewrote a Fortran `D` exponent to an
+`E`. Format 604, the `mass of ion` line, was the only edit descriptor in either
+source that asked for `1pd` rather than `1pe`, and neither source has one now.
+g77 printed `1.0417E+02`; gfortran printed `1.0417D+02` — same value, same
+digits, different exponent letter, a runtime formatting difference and not
+physics. Until v1.2 no gfortran build could match the published references byte
+for byte on any platform without the rule.
 
-2. **Fortran `D` exponent → `E`.** Format 604, the `mass of ion` line, is the
-   only edit descriptor in either source that uses `1pd` rather than `1pe`:
+**Correcting the descriptor cost no regeneration**, which is not what this file
+said for four chunks. `sample-output/` already read `E`: chunk 5 committed output
+passed through `normalize()`, so the references hold g77's spelling, and the
+corrected program prints exactly that. `1pd11.4` and `1pe11.4` produce the same
+eleven characters but for the letter — verified on this compiler before the
+change, not assumed from the descriptor. So v1.2 changed one line per source
+file, deleted the rule, and moved nothing in `sample-output/`.
 
-   ```sh
-   grep -n 'pd[0-9]' mobcal_He.f mobcal_N2.f
-   ```
+**The evidence that the rule was live and was doing only this is the intermediate
+state**, and it is the check to repeat before touching `normalize()` again. With
+the rule removed and the descriptor still `1pd`, the helium gate fails T1 and T3
+on the `mass of ion` line and on nothing else, and T2 does not move; with the
+descriptor corrected it passes all three tiers against the untouched reference.
+The three-platform, two-gas CI matrix is what carries that from helium on Windows
+to the claim that the rule normalized that line and no other.
 
-   g77 printed `1.0417E+02`; gfortran prints `1.0417D+02`. Same value, same
-   digits, different exponent letter — a runtime formatting difference, not
-   physics. Without this rule no gfortran build can match the published
-   references byte for byte on any platform. Correcting the descriptor to `1pe`
-   would remove the need for the rule. Chunk 5 was the moment to do it — it
-   regenerates the fixtures anyway — and chose not to, so that the one
-   regeneration commit's diff would contain exactly the two changes it claims and
-   nothing that merely rode along. It is now a change that costs a regeneration
-   of its own.
-
-**A third difference is staged away rather than normalized.** Both references
+**The other difference is staged away rather than normalized.** Both references
 echo the name of the file they were run on, twice, and that name is
 `Choline_pop.mfj` — the 2012 run's. This repository ships the same coordinates
 as `Choline.mfj`. So `test/regression.sh` copies the input to the name it reads
 out of the reference before running, rather than editing either side of the
 comparison. The consequence is worth stating in the contributor notes because it
-surprises anyone checking a build by hand: a user who runs the shipped
-`mobcal.in` directly and diffs the result gets one differing field, twice, on
-top of the two rules above — and it is the echoed filename, not a number.
+surprises anyone checking a build by hand: a user who copies one of the shipped
+`mobcal_He.in` / `mobcal_N2.in` templates to `mobcal.in`, runs it directly, and
+diffs the result gets one differing field, twice, on top of the line terminator
+on Windows — and it is the echoed filename, not a number.
 Chunk 7 measured exactly that from a clean clone, and `README.md`'s *Run the
-compiled code* now names all three differences instead of promising an exact
-match.
+compiled code* names both differences instead of promising an exact match.
+
+## How the documentation cites the source
+
+`docs/` names **a subprogram plus a format label, or a subprogram plus a
+verbatim statement** — "`ljparm`'s `itest.eq.0` arm, format 602";
+"`read(9,'(a30)',end=100) dummy`, the first executable statement of `ncoord`".
+It gives no line numbers. That is a decision taken in v1.2, and it was taken
+after measuring what the alternative had already cost.
+
+**The measurement.** `docs/mfj-format.md` and `docs/parameters.md` between them
+carried 30 `file:line` citations. Two commits made 22 of them wrong, and
+**neither changed the behaviour of anything cited**:
+
++ `59c737b` rewrote provenance *comments* inside the two element tables. No
+  non-comment line of either source changed — verified mechanically, and said
+  so in that commit's own message. It still pushed everything below the tables
+  down 22 lines in `mobcal_He.f` and 46 in `mobcal_N2.f`, falsifying 10
+  citations. Nine of them were in `docs/mfj-format.md`, which that same commit
+  edited, to add one *See also* bullet, without noticing. The tenth was in
+  `docs/parameters.md`, which that same commit *created*: its pointer at the
+  Lennard-Jones potential line was read off the file before the rewrite moved
+  it, and landed on `sum4=0.d0`. That citation was never correct, not for one
+  commit.
++ `28a4bd0` added one element row — chunk 9's phosphorus in helium — and three
+  lines in the main program for the 2.1 parameter-set string. That moved
+  `fcoord` down 3 and `ljparm`'s contents down 26 further, falsifying the
+  remaining 12: every helium citation the first commit had not already broken.
+
+The 8 that survived are all in `mobcal_N2.f` and all at or above `ljparm`'s own
+header — the one region neither commit inserted into. That is the whole
+mechanism: these files gain element rows every release and gain comments
+whenever somebody learns something about a row, and a citation's correctness
+depends on nobody having done either above it.
+
+No gate can fail when this happens. The four gates build and run the program,
+and `test/refusals.sh` reads the sources themselves; none of them reads
+`docs/`. An ungated claim that decays on a schedule
+is what *Weakening T3 is a commit, not a default* exists to prevent, and a
+stale citation is worse than no citation: it sends a reader to a real line that
+is not the one meant, which reads as a misunderstanding of the code rather than
+as a broken pointer.
+
+**Half the address is the subprogram, and that is not decoration.** Format
+labels are unique within a program unit and nowhere else. `602` occurs six
+times in `mobcal_N2.f`; `624`, `616` and `651` occur twice each in both files.
+So "format 602" alone is ambiguous and "`ljparm`, format 602" is exact. For
+code carrying no label — `imass(iatom)=nint(ximass)`, the `if(unit.eq.'au')`
+block — quote the statement instead. That is what a reader greps for anyway,
+which is why most of these citations already carried the text *and* a number:
+the number was redundant before it was wrong.
+
+The rule covers pasted `grep -n` output too. `test/regression.sh` carried a
+transcript of the `1pd` grep whose two line numbers had drifted by 46 and 73;
+it was reduced to the same grep without `-n`, and v1.2 then retired the
+descriptor and the transcript with it.
+
+**The rule was tested before it was committed, by accident.** `cd45c29` landed
+on `v1.2-dev` while this change was in review: it converted every refusal to
+`call exit(1)`, changing 55 lines in `mobcal_He.f` and 38 in `mobcal_N2.f`.
+All 45 anchors the rewritten docs use still resolved, unedited, at the same
+multiplicity — checked, not assumed. The one thing in `docs/` that commit *did*
+have to touch by hand was a line-number citation it had added itself, in the
+same file, for a refusal whose line numbers its own change moved.
+
+**One claim of the same class was corrected alongside them.**
+`docs/mfj-format.md` said the list of defined keys in format 602 "is generated
+from the build's actual table, so it can't drift out of sync with what the code
+accepts". It is not generated from anything — it is a hardcoded string a few
+lines below the rows, `test/elements.sh` asserts that the refusal fires and
+names the key but never compares the list against the rows, and nothing else
+compares them either. Both files' lists are in fact correct today. *Adding an
+element* in `docs/parameters.md` now carries the one command that shows it, and
+says plainly that it is a hand check.
 
 ## Building
 
 The recipe is `-O3 -fno-automatic -std=legacy`, plus `-static` on Windows. It
-lives in exactly one place — `FFLAGS` in `test/build-flags.sh`, which all three gates
+lives in exactly one place — `FFLAGS` in `test/build-flags.sh`, which all four gates
 source — because the CI workflow does not set `FFLAGS` and therefore cannot drift
 from it. `README.md` documents the same flags for users; that copy is prose and
 has to be updated by hand, so change both.
