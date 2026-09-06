@@ -1,0 +1,99 @@
+# mobcal_N2.params -- the nitrogen element table of MOBCAL-2012.
+#
+# Read at run time by mobcal_N2.f (the reader is mobcal_ljread.inc).  The
+# program takes the file's name from line 4 of mobcal.in, or looks for
+# this name in the current directory when that line is absent or blank.
+# docs/parameters.md documents the format and derives every number here;
+# README.md "Supported elements" is the user-facing summary.
+#
+# THE NUMBERS ARE WRITTEN EXACTLY AS THE FORTRAN SOURCE WROTE THEM through
+# v1.2, and are read with the kind Fortran gives the literal: a token with
+# a d exponent is double precision, a token without one is SINGLE
+# precision, promoted after the read.  Every value in the two numeric
+# columns below is a single-precision literal, and that is load-bearing:
+# 0.4020d0 is a different number from 0.4020 in the eighth digit and
+# moves published output.  Rows are copied verbatim, never tidied.  One /
+# or one * is permitted inside a number (conve, below, needs the *).
+#
+# Comments run from # to end of line; blank lines are ignored.  Header
+# lines are "key: value" and come before the rows.  An element row is
+# eight columns, then | and free-text provenance to end of line:
+#
+#   key    integer mass key, nint(atomic weight), as in the .mfj file
+#   elem   symbol, for the reader's eye; the program does not check it
+#   mass   atomic mass used for the ion's mass and centre of mass
+#   f*D_I  UFF well depth times the element's factor, kcal/mol
+#   f*x_I  UFF bond distance times the element's factor, Angstrom
+#   rhs    hard-sphere radius, Angstrom      -> rhs = rhs * 1.0d-10
+#   lj     fitted | provisional   (provisional prints a warning per atom)
+#   rhs    own | borrowed         (borrowed prints a warning per atom)
+#
+# "form: combining" -- these are X-X SELF parameters combined with the gas
+# at run time by the geometric-mean rule, using the four header constants:
+#
+#     eolj = dsqrt(eogas * f*D_I) * conve * xe
+#     rolj = dsqrt(rogas * f*x_I) * convr * 1.0d-10
+#
+# EVERY ROW IS UFF.  Each is Rappe's universal force field x_I and D_I [4]
+# times one per-element scaling factor, fitted to reproduce experimental
+# nitrogen cross sections [1, 5, 6]: 0.43 for hydrogen, 1.20 for nitrogen,
+# 0.93 for carbon, oxygen, fluorine, chlorine, bromine, iodine, potassium
+# and caesium, 1.00 -- unscaled -- for lithium, sodium, silicon,
+# phosphorus, sulfur and iron.  All 32 literals reproduce f*D_I and f*x_I
+# to five significant figures; the residual is the rounding of these
+# four-decimal literals (potassium: 0.035*0.93 = 0.03255, written 0.0326).
+# That is why no row here is provisional, unlike helium's four newest.
+#
+# eogas and rogas are UFF nitrogen unscaled, so the buffer gas takes
+# factor 1.00 while the ion's own nitrogen atoms take 1.20 -- that
+# asymmetry is in the fitted parameterization.  conve converts kcal/mol
+# to eV and writes 4.2 kJ/kcal where the figure is 4.184, so every well
+# depth is uniformly high by 4.2/4.184 = 1.0038241, or 0.382 %.  DO NOT
+# CORRECT IT: it is inside every nitrogen result this code has published
+# and inside the factors above, which were fitted with it in place.
+# convr is 2**(-1/6), converting UFF's r_min to a Lennard-Jones sigma.
+#
+# "borrowed" marks a hard-sphere radius taken from carbon's 2.7 Angstrom
+# rather than fitted; it prints a warning, and matters only to the
+# EHSS/PA calculation, which mobcal_N2.f does not perform.  The
+# hard-sphere radius is gas-independent in this code: every element
+# defined in both files carries the same rhs in both.
+#
+# Reference numbers [n] are README.md's.
+
+gas:   N2
+form:  combining
+set:   2.0
+
+eogas: 0.06900d0
+rogas: 3.6600d0
+conve: 4.2d0*0.01036427d0
+convr: 0.890898718d0
+
+# key elem mass       f*D_I      f*x_I      rhs      lj           rhs       | provenance
+   1  H    1.008d0    0.0189     1.2409     2.2d0    fitted       own       | UFF x 0.43 [4]; factors fitted to nitrogen cross sections [1, 5, 6]
+   7  Li   7.00d0     0.0250     2.4510     2.7d0    fitted       borrowed  | UFF x 1.00, no factor fitted [4, 6]; hard-sphere radius carbon's (v1.1, set 2.0)
+  12  C    12.01d0    0.0977     3.5814     2.7d0    fitted       own       | UFF x 0.93 [4]
+# An alternate, non-combining carbon pair carried commented out in the
+# 2012 source and never live -- the only record of that parameterization:
+#     eolj(iatom)=0.139373598*xe
+#     rolj(iatom)=3.85949064*0.890898718*1.0d-10
+  14  N    14.01d0    0.0828     4.3920     2.7d0    fitted       own       | UFF x 1.20 [4]; the gas itself is unscaled UFF nitrogen (eogas, rogas above); hard-sphere radius carbon's ("same as carbon", 2012)
+#     eolj(iatom)=0.112982299*xe
+#     rolj(iatom)=3.762562956*0.890898718*1.0d-10
+  16  O    16.00d0    0.0558     3.2550     2.7d0    fitted       own       | UFF x 0.93 [4]; hard-sphere radius carbon's ("same as carbon", 2012)
+#     eolj(iatom)=0.105356537*xe
+#     rolj(iatom)=3.679402125*0.890898718*1.0d-10
+  19  F    19.00d0    0.0465     3.1285     2.7d0    fitted       own       | UFF x 0.93 [4]; hard-sphere radius carbon's (2012)
+  23  Na   22.99d0    0.03000    2.9830     2.853d0  fitted       own       | UFF x 1.00 -- pre-existing, not re-optimized when the factors were fitted [4]; the Viehland note in mobcal_He.params describes that file's Na row, not this one
+  28  Si   28.09d0    0.4020     4.2950     2.95d0   fitted       own       | UFF x 1.00 [4]; the row v1.1 adopted -- NCOORD's second copy held UFF iron (0.0130 / 2.9120) under silicon's comment
+  31  P    30.97d0    0.305      4.1470     4.2d0    fitted       own       | UFF x 1.00 [4] (2015)
+  32  S    32.06d0    0.2740     4.0350     3.5d0    fitted       own       | UFF x 1.00 [4]
+#     eolj(iatom)=0.225144398*xe
+#     rolj(iatom)=3.950617673*0.890898718*1.0d-10
+  35  Cl   35.00d0    0.2111     3.6707     2.7d0    fitted       borrowed  | UFF x 0.93 [4, 5]; hard-sphere radius carbon's (v1.1, set 2.0)
+  39  K    39.00d0    0.0326     3.5456     2.7d0    fitted       borrowed  | UFF x 0.93 [4, 6]; hard-sphere radius carbon's (v1.1, set 2.0)
+  56  Fe   55.85d0    0.0130     2.9120     3.5d0    fitted       own       | UFF x 1.00 [4]
+  80  Br   80.00d0    0.2334     3.8957     2.7d0    fitted       borrowed  | UFF x 0.93 [4, 5]; hard-sphere radius carbon's (v1.1, set 2.0)
+ 127  I    127.00d0   0.3153     4.1850     2.7d0    fitted       borrowed  | UFF x 0.93 [4, 5]; hard-sphere radius carbon's (v1.1, set 2.0)
+ 133  Cs   133.00d0   0.0419     4.2008     2.7d0    fitted       borrowed  | UFF x 0.93 [4, 6]; hard-sphere radius carbon's (v1.1, set 2.0)

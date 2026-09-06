@@ -54,8 +54,9 @@ convention, not a requirement.
 The fourth field on each atom line is read into a real variable, then
 immediately replaced: `imass(iatom)=nint(ximass)`, once in `fcoord` and again
 in `ncoord`, in both files. That integer is looked up in the per-element table
-(`ljparm`, one per source file), and it is the table's value — not the number
-you wrote — that becomes the atom's actual mass for every subsequent
+(`ljparm`, one per source file, consulting the rows read at start-up from
+`mobcal_He.params` or `mobcal_N2.params`), and it is the table's value — not
+the number you wrote — that becomes the atom's actual mass for every subsequent
 calculation, including the `mass of ion` line and the reduced-mass constant
 `mu`. Two consequences:
 
@@ -72,12 +73,11 @@ calculation, including the `mass of ion` line and the reduced-mass constant
   give an atom a mass that isn't one of the table's own values.
 
 An unrecognized key names the atom, the key, the `nint(atomic weight)`
-convention, and the full list of keys the build defines — `ljparm`'s
-`itest.eq.0` arm, format 602. That list is a hardcoded string sitting
-immediately below the rows it describes, not something generated from them,
-and no gate compares the two; it is accurate in both files today, and keeping
-it so is a step in *Adding an element* in `docs/parameters.md`, which gives
-the one-line check.
+convention, and the full list of keys the table defines — `ljparm`'s
+`itest.eq.0` arm, format 602. Since v1.3 that list is written from the table
+the run just read, in the file's order, and `test/elements.sh` compares it
+against the file's rows; through v1.2 it was a hardcoded string below the rows
+that nothing checked, and v1.2's documentation said so.
 
 ## Units
 

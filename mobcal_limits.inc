@@ -8,6 +8,7 @@ c     it meant thirty consistent edits; now it is one.
 c
 c       len     maximum atoms in one conformer
 c       lcoord  maximum coordinate sets (conformers) in one input file
+c       ltab    maximum element rows in one parameter file (v1.3)
 c
 c     Both are checked against the input by FCOORD, which refuses and exits
 c     nonzero rather than indexing past the end of an array. That check is not
@@ -37,9 +38,15 @@ c     `len' shadows the Fortran intrinsic LEN. That is pre-existing and is
 c     accepted under -std=legacy. It is not worth renaming: the name appears in
 c     every dimension expression in both sources.
 c
-c     Both names must begin with i, j, k or l. Every unit that includes this
+c     ltab bounds the table LJREAD loads from mobcal_He.params or
+c     mobcal_N2.params; the files ship with 13 and 16 rows. It is checked by
+c     LJREAD, which refuses a file with more rows rather than overrunning the
+c     table.
+c
+c     All three names must begin with i, j, k or l. Every unit that includes this
 c     file declares `implicit double precision (a-h,m-z)', so a name beginning
 c     with m..z would be typed REAL and become a non-integer array bound.
 c
       parameter (len=1000)
       parameter (lcoord=100)
+      parameter (ltab=64)

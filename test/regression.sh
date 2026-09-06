@@ -184,6 +184,11 @@ for gas in $GASES; do
     echo "  seed         : $seed"
 
     cp "$ROOT/Choline.mfj" "$d/$staged"
+    # Since v1.3 the element table is a file the program reads at start-up,
+    # under a fixed per-gas name in the current directory unless mobcal.in's
+    # optional 4th line says otherwise. Copied rather than named by path: a
+    # POSIX $ROOT path is not one a native Windows binary can open.
+    cp "$ROOT/${src%.f}.params" "$d/"
     # mobcal.in is three records: input file, output file, seed. Both filename
     # fields are read with an a30 edit descriptor, so they must not exceed 30
     # characters. The program reads it from the current directory under that

@@ -88,7 +88,8 @@ jobs:
           set -eu
           bad=0
           for f in mobcal_He.f mobcal_N2.f \
-                   mobcal_limits.inc mobcal_version.inc \
+                   mobcal_limits.inc mobcal_version.inc mobcal_ljread.inc \
+                   mobcal_He.params mobcal_N2.params \
                    Choline.mfj mobcal_He.in mobcal_N2.in \
                    sample-output/Choline_He.out sample-output/Choline_N2.out \
                    test/regression.sh test/bounds.sh test/elements.sh \

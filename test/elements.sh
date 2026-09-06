@@ -103,6 +103,32 @@
 #   fixtures rather than committing them.
 #
 #
+#
+# V1.3 -- THE TABLE IS A FILE
+#
+# Since v1.3 there is no element table in either source file. LJPARM looks
+# each mass key up in the table LJREAD (mobcal_ljread.inc) loaded at start-up
+# from mobcal_He.params or mobcal_N2.params, and the rows in those files are
+# the literals the Fortran carried through v1.2, spelled exactly as it spelled
+# them: a token without a d exponent is read as a REAL(4), as the compiler read
+# it, which is what keeps every value bit for bit what it was. Every assertion
+# above still holds and still means what it meant -- it is the same probe
+# calling the same FCOORD and NCOORD -- with two additions.
+#
+# The source check changes shape: instead of counting `itest=1' lines against
+# the number of rows, it requires that NO `imass(iatom).eq.<key>' comparison
+# survives in the source (a second table) and that the reader is included
+# exactly once.
+#
+# And the gate can now read the table, so it no longer has to settle for the
+# rows the committed fixtures happen to contain. A last block generates a
+# fixture with one atom per row of the file and checks the probe's values for
+# every row against the file's, the mass of that ion against the sum of the
+# file's masses, the two warning counts against the file's own flag columns,
+# and the key list the `type not defined' refusal prints -- written from the
+# loaded table since v1.3 -- against the file's keys in order.
+#
+#
 # HOW THE PROBE IS BUILT
 #
 # The two sources each open with an unnamed main program, so they cannot be
@@ -223,6 +249,95 @@ pin_atom() {
          END { if (!seen) print "n" }' "$dat"
 }
 
+# --- reading the parameter file ----------------------------------------------
+#
+# The rows of a parameter file: eight columns each, comment (#...) and
+# provenance (|...) stripped, a trailing CR tolerated, in file order. Header
+# lines are two tokens with the first ending in a colon and are excluded.
+# A literal CR from printf rather than the escape '\r', for the reason
+# test/regression.sh gives: BSD sed on macOS reads '\r' as a literal 'r' and
+# would turn `form: pair' into `form: pai'.
+CR=$(printf '\r')
+param_lines() {
+    sed -e "s/${CR}\$//" -e 's/#.*//' -e 's/|.*//' "$1"
+}
+param_rows() {
+    param_lines "$1" | awk 'NF == 8 && $1 !~ /:$/'
+}
+
+# The value of one header key.
+param_header() {
+    param_lines "$1" | awk -v k="$2:" '$1 == k { print $2; exit }'
+}
+
+# The value of one Fortran literal, or two joined by one / or *, in awk's
+# double precision. The d exponent becomes e for awk's strtod; the kind
+# distinction the program preserves is below this gate's tolerance.
+AWK_LIT='function lit(t,   n, a, b) {
+             gsub(/[dD]/, "e", t)
+             if ((n = index(t, "*")) > 0) { a = substr(t, 1, n - 1) + 0; b = substr(t, n + 1) + 0; return a * b }
+             if ((n = index(t, "/")) > 0) { a = substr(t, 1, n - 1) + 0; b = substr(t, n + 1) + 0; return a / b }
+             return t + 0
+         }'
+
+# One line per row: position in file order, then the well depth in eV, the
+# radius in Angstrom and the hard-sphere radius in Angstrom that the program
+# should hold for it -- the probe dumps exactly those three, in those units.
+file_expected() {
+    f=$1
+    form=$(param_header "$f" form)
+    param_rows "$f" | awk -v form="$form" \
+        -v eog="$(param_header "$f" eogas)" -v rog="$(param_header "$f" rogas)" \
+        -v cve="$(param_header "$f" conve)" -v cvr="$(param_header "$f" convr)" "$AWK_LIT"'
+        BEGIN { if (form == "combining") { EOG = lit(eog); ROG = lit(rog); CVE = lit(cve); CVR = lit(cvr) } }
+        {
+            e = lit($4); s = lit($5); r = lit($6)
+            if (form == "combining") { e = sqrt(EOG * e) * CVE; s = sqrt(ROG * s) * CVR }
+            printf "%d %.10e %.10e %.10e\n", NR, e, s, r
+        }'
+}
+
+# Every set-1 record of the probe dump against the expected values, by
+# position, within 1e-4 relative; and every expected row must have a record.
+rows_match() {
+    awk 'function dev(a, b) { d = (a - b) / b; return d < 0 ? -d : d }
+         NR == FNR { E[$1] = $2; S[$1] = $3; R[$1] = $4; n++; next }
+         $1 == 1 { seen++
+                   if (!($2 in E)) { bad++; next }
+                   if (dev($3, E[$2]) > 1e-4 || dev($4, S[$2]) > 1e-4 || dev($5, R[$2]) > 1e-4) bad++ }
+         END { print ((bad || seen != n) ? "n" : "y") }' "$1" "$2"
+}
+
+file_mass_sum() {
+    param_rows "$1" | awk "$AWK_LIT"'{ m += lit($3) } END { printf "%.6e", m }'
+}
+
+rel_ok() {
+    awk -v a="$1" -v b="$2" 'BEGIN { d = (a - b) / b; if (d < 0) d = -d; print (d <= 1e-4 ? "y" : "n") }'
+}
+
+# How many rows carry value $3 in column $2.
+flag_count() {
+    param_rows "$1" | awk -v c="$2" -v v="$3" '$c == v { n++ } END { print n + 0 }'
+}
+
+# One atom per row of the parameter file, in file order, along x, uncharged,
+# and a second coordinate set identical to the first.
+write_allkeys() {
+    rows=$(param_rows "$1" | awk '{ print $1 }')
+    n=$(echo "$rows" | wc -l | tr -d ' ')
+    { echo "elements gate: one atom per row of $(basename "$1")"
+      echo 2
+      echo "$n"
+      echo ang
+      echo calc
+      echo 1.0000
+      echo "$rows" | awk '{ printf "%12.5f%13.5f%13.5f%4d%15.6f\n", NR * 0.5, 0.0, 0.0, $1, 0.0 }'
+      echo "second coordinate set, identical to the first"
+      echo "$rows" | awk '{ printf "%12.5f%13.5f%13.5f%4d%15.6f\n", NR * 0.5, 0.0, 0.0, $1, 0.0 }'
+    } > "$2"
+}
+
 # A throwaway 1,000-atom fixture (this build's own array bound, len=1000 in
 # mobcal_limits.inc) whose last atom carries a mass key neither table defines.
 # Generated rather than committed, the same reasoning as test/bounds.sh's
@@ -261,22 +376,34 @@ for gas in $GASES; do
     case "$gas" in
         he) src=mobcal_He.f
             si_eps=1.35e-3 ; si_sig=3.5        ; si_rhs=2.95
-            itest_want=13 ; prov_want=8 ; borrow_want=6 ;;
+            si_eps16=1.350000000000000E-03
+            prov_want=8 ; borrow_want=6 ;;
         n2) src=mobcal_N2.f
             si_eps=7.249792567e-3 ; si_sig=3.532242086 ; si_rhs=2.95
-            itest_want=16 ; prov_want=0 ; borrow_want=12 ;;
+            si_eps16=7.249792657180476E-03
+            prov_want=0 ; borrow_want=12 ;;
         *)  echo "elements.sh: unknown gas '$gas'" >&2; exit 2 ;;
     esac
 
     d="$WORK/$gas"
     mkdir -p "$d"
+    # The element table itself (v1.3): what the probe reads at start-up, and
+    # what the assertions below compare the probe against.
+    params=$(params_for "$src")
+    PARAMS="$ROOT/$params"
+    cp "$PARAMS" "$d/"
     echo "=== $gas ============================================================"
 
-    # One element table per source file, not a reintroduced second copy: every
-    # itest=1 line belongs to exactly one row of exactly one table.
-    got_itest=$(grep -c '^ *itest=1$' "$ROOT/$src")
-    check "exactly one element table ($got_itest itest=1 lines, want $itest_want)" \
-          "$(status "$got_itest" "$itest_want")"
+    # No element table in the source at all since v1.3: the rows live in the
+    # parameter file, and a `.eq.<key>' comparison against imass reappearing in
+    # the Fortran would be a second table -- the thing chunk 3 removed. Through
+    # v1.2 this counted `itest=1' lines against the number of rows instead.
+    got_rows=$(grep -c 'imass(iatom)\.eq\.[0-9]' "$ROOT/$src" || true)
+    check "no element row survives in $src ($got_rows imass(iatom).eq.<key> lines)" \
+          "$(status "$got_rows" 0)"
+    got_inc=$(grep -c "^      include 'mobcal_ljread.inc'" "$ROOT/$src" || true)
+    check "$src includes the shared reader exactly once (got $got_inc)" \
+          "$(status "$got_inc" 1)"
 
     if ! strip_subprograms "$ROOT/$src" "$d/subs.f"; then
         echo "  FAILED to isolate the subprograms of $src"
@@ -284,8 +411,8 @@ for gas in $GASES; do
         continue
     fi
     # gfortran resolves an include relative to the directory of the source
-    # file, so the include has to sit beside the stripped copy.
-    cp "$ROOT/mobcal_limits.inc" "$d/"
+    # file, so the includes have to sit beside the stripped copy.
+    stage_probe_includes "$ROOT" "$d"
     write_driver "$ROOT/$src" "$d/ljprobe.f"
 
     echo "  building     : $FC $FFLAGS $LDFLAGS -o ljprobe subs.f ljprobe.f"
@@ -333,6 +460,23 @@ for gas in $GASES; do
     check "silicon carries the adopted well depth, radius and hard-sphere radius" \
           "$(pin_atom "$DAT" 1 "$si_eps" "$si_sig" "$si_rhs")"
 
+    # The kind rule, pinned to the digit. Since v1.3 the literal comes from a
+    # text file and LJREAD must read it with the kind the compiler gave the
+    # same spelling: 0.4020 (no d) as a REAL(4), 1.35d-3 as a REAL(8). The 1e-4
+    # pin above cannot see that -- the two readings differ in the eighth
+    # digit -- so silicon's well depth is also pinned as the 16-digit text the
+    # probe prints, which is the value the compiled table produced (checked
+    # bit for bit against the v1.2 build when the file was introduced). Read
+    # 0.4020 as a double and the nitrogen value becomes 7.249792567...E-03;
+    # read 1.35d-3 as a single and the helium value becomes 1.350000035...E-03.
+    # Verified by mutation: reading everything as a double fails nitrogen's pin
+    # and nothing else; reading everything as a single fails helium's, and
+    # nitrogen's too, through the d0 header constants the combining rule uses.
+    # As portable as T3's premise: the same double prints the same 16 digits.
+    got16=$(awk '$1 == 1 && $2 == 1 { print $3 }' "$DAT")
+    check "silicon's well depth is the single/double-kind value to 16 digits ($got16)" \
+          "$(if [ "$got16" = "$si_eps16" ]; then echo y; else echo n; fi)"
+
     # Neither of chunk 4's warnings has any business firing here: this fixture
     # carries only hydrogen and silicon, neither provisional nor new. Nitrogen,
     # oxygen and fluorine -- which DO already carry the same borrowed 2.7
@@ -350,6 +494,7 @@ for gas in $GASES; do
     sed 's/  28  /  99  /' "$MFJ" > "$d/undefined.mfj"
     printf '%s\n%s\n%s\n' undefined.mfj ljprobe.out 96 > "$d/mobcal.in"
     ( cd "$d" && ./ljprobe > undefined.stdout 2>&1 ) || true
+    cp "$d/ljprobe.out" "$d/undefined.out"
     r=y
     [ "$(present 'type not defined for atom number' "$d/ljprobe.out")" = y ] || r=n
     [ "$(present 'nint\(atomic weight\)'             "$d/ljprobe.out")" = y ] || r=n
@@ -453,6 +598,67 @@ for gas in $GASES; do
     # where that change is gated properly, on the real binary as well as here.
     check "exit status is nonzero (the refusal reaches the caller)" \
           "$(nonzero "$st4")"
+
+    # --- the file against the probe, every row -----------------------------
+    #
+    # Everything above exercises only the rows the committed fixtures happen
+    # to contain -- four of thirteen (He) or ten of sixteen (N2) in the first
+    # two fixtures, none in the third. Since v1.3 the table is a file, so the
+    # gate can read it: this block generates a fixture with one atom per row
+    # of the file, in file order, two identical coordinate sets, and asserts
+    # that what the probe reads back for each atom is what the file says,
+    # evaluated here by the form the file declares (pair: the literal itself;
+    # combining: sqrt(eogas*e)*conve and sqrt(rogas*s)*convr) in awk's double
+    # precision, within the 1e-4 tolerance the pins above use. The file's
+    # single-precision literals round at ~1e-7 relative, well inside it. A row
+    # no fixture contains is therefore no longer a row no gate reads.
+    #
+    # The same block checks the three things the file now determines that the
+    # pins above cannot: the mass (the one per-atom quantity the probe cannot
+    # dump, so the output file's `mass of ion' is compared with the sum of the
+    # file's masses), the warning counts against the file's own flag columns
+    # (the hardcoded 8/6 and 0/12 above pin those flags to what v1.1 decided;
+    # this pins the program to whatever the file says), and the key list in
+    # the `type not defined' refusal, which is written from the loaded table
+    # and must therefore be the file's keys in the file's order -- the claim
+    # v1.2 withdrew as ungated when the list was a hardcoded string.
+    write_allkeys "$PARAMS" "$d/allkeys.mfj"
+    NKEYS=$(sed -n '3p' "$d/allkeys.mfj" | tr -d ' \r')
+    printf '%s\n%s\n%s\n' allkeys.mfj ljprobe.out 96 > "$d/mobcal.in"
+    if ( cd "$d" && ./ljprobe > allkeys.stdout 2>&1 ); then st5=0; else st5=$?; fi
+    cp "$d/ljprobe.out" "$d/allkeys.out"
+
+    echo "  --- probe: every row of $params ($NKEYS rows, exit $st5) ---"
+
+    check "the all-keys probe ran" "$(status "$st5" 0)"
+    want=$((2 * NKEYS))
+    got=$(grep -c . "$DAT" || true)
+    check "every row reached both coordinate sets ($got of $want records)" \
+          "$(status "$got" "$want")"
+    check "every row: identical parameters in both coordinate sets" \
+          "$(identical_across_sets "$DAT")"
+    file_expected "$PARAMS" > "$d/expected.dat"
+    check "every row's well depth, radius and hard-sphere radius match the file (1e-4 relative)" \
+          "$(rows_match "$d/expected.dat" "$DAT")"
+    mfile=$(file_mass_sum "$PARAMS")
+    mprog=$(grep -F 'mass of ion =' "$d/allkeys.out" | head -1 | sed 's/.*= *//' | tr -d ' \r')
+    check "mass of ion equals the sum of the file's masses ($mprog vs $mfile)" \
+          "$(rel_ok "$mprog" "$mfile")"
+    pw=$(( 2 * $(flag_count "$PARAMS" 7 provisional) ))
+    bw=$(( 2 * $(flag_count "$PARAMS" 8 borrowed) ))
+    pc=$(grep -c 'WARNING: provisional' "$d/allkeys.out" || true)
+    bc=$(grep -c 'borrowed from carbon' "$d/allkeys.out" || true)
+    check "provisional warnings are 2 x the file's provisional rows (got $pc, want $pw)" \
+          "$(status "$pc" "$pw")"
+    check "borrowed-radius warnings are 2 x the file's borrowed rows (got $bc, want $bw)" \
+          "$(status "$bc" "$bw")"
+    listed=$(awk '/defined keys:/ { getline; print; exit }' "$d/undefined.out" | tr -d ' \r')
+    filekeys=$(param_rows "$PARAMS" | awk '{ printf "%s%s", (NR > 1 ? "," : ""), $1 }')
+    check "the refusal lists the file's keys in the file's order ($listed)" \
+          "$(if [ "$listed" = "$filekeys" ]; then echo y; else echo n; fi)"
+    fset=$(param_header "$PARAMS" set)
+    check "the file declares a parameter-set version (set: $fset)" \
+          "$(if [ -n "$fset" ]; then echo y; else echo n; fi)"
 
     echo
 done

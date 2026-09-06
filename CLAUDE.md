@@ -223,6 +223,24 @@ already borrow carbon's 2.7 Å hard-sphere radius, so a warning that fired on
 that value rather than on element identity would still pass a check that only
 asked "did it fire" — see *Chunk 4* below for the full reasoning.
 
+**Since v1.3 the gate reads the table, so a row no fixture contains is no
+longer a row no gate reads.** The three fixtures above reach four of thirteen
+helium rows and ten of sixteen nitrogen rows. The gate now also generates a
+fixture with one atom per row of `mobcal_<gas>.params`, in file order, probes
+it, and compares every row's well depth, radius and hard-sphere radius as the
+program holds them against the file's values evaluated by the form the file
+declares, in awk, within the same 1e-4. It compares the printed `mass of ion`
+with the sum of the file's masses (the one per-atom quantity the probe cannot
+dump, `xmass` being `fcoord`-local), the two warning counts with the file's own
+flag columns, and the key list in the undefined-element refusal — written from
+the loaded table since v1.3 — with the file's keys in order, which is the claim
+v1.2 withdrew as ungated when the list was a string. The source check changed
+shape with it: no `imass(iatom).eq.<key>` comparison may survive in either
+source, and the reader must be included exactly once. And silicon's well depth
+is pinned to 16 digits in both gases, which is what sees the reader's kind rule
+(*The element tables are files*). Verified by mutation, eight cases, each
+failing where it should and nowhere else.
+
 ## The exit-status gate
 
 ```sh
@@ -255,6 +273,12 @@ of thing:
 `mobcal_N2.f`'s energy-conservation block is commented out in the source as it
 shipped, which is why that file has seven and not eight. The gate asserts that
 it is *still* commented out rather than quietly running one case fewer there.
+
+v1.3 added a family in `ljread` (`mobcal_ljread.inc`): the parameter file
+missing, for the other gas, or malformed. All `call exit(1)`, all echoed to
+unit 6, all before the banner. The gate drives three of them through the real
+binary plus a control that gets past `ljread` by a relative 4th-line path, and
+its static check also reads the include, where no bare `stop` may appear.
 
 Five things about this that are easy to get wrong:
 
@@ -309,16 +333,97 @@ portable a fact as any number it prints. If a platform ever disagrees this
 fails loudly, which is the right outcome: it would mean T3's premise had
 changed.
 
-## The one element table
+## The element tables are files
 
-`ljparm` — one per source file, called by `fcoord` and by `ncoord`. Adding,
-removing or editing an element row means editing exactly one place per gas.
+Since v1.3 there is no element table in either source. `mobcal_He.params` and
+`mobcal_N2.params` hold the rows; `mobcal_ljread.inc` holds the one reader,
+included by both sources after their last program unit; `ljparm` in each source
+looks a mass key up in the loaded table and applies the row. `docs/parameters.md`
+documents the format for users. What follows is what a contributor must not get
+wrong.
 
-**It is one subroutine per file, not one shared between the two files, and that
-is not an oversight.** The two tables hold different quantities. `mobcal_He.f`
-holds He–X *pair* parameters directly (`eolj(iatom)=1.3266d-3*xe`).
-`mobcal_N2.f` holds X–X *self* parameters that pass through a combining rule
-with the gas (`dsqrt(eogas*0.0977)*conve*xe`). Merging them would require
+**The spelling of a literal is its precision, and the reader honours it.**
+`mobcal_N2.f` multiplied a double by single-precision literals
+(`dsqrt(eogas*0.4020)`) and `mobcal_He.f` used double literals throughout
+(`1.3266d-3*xe`), so the two tables need two kinds of read. Measured before the
+format was chosen, with every literal compiled under the gate flags and read
+back from text: the 32 nitrogen literals reproduce the compiled bit pattern
+32/32 when read into a REAL(4) and promoted, 0/32 when read into a REAL(8); the
+26 helium literals 26/26 as REAL(8), 4/26 as REAL(4). So `ljnum` reads a token
+with a `d` as a REAL(8) and a token without one as a REAL(4), the files carry
+every literal exactly as the Fortran did, and nothing in either file has been
+"tidied" to `d0`. `test/elements.sh` pins silicon's well depth to 16 digits in
+both gases for exactly this: read `0.4020` as a double and the nitrogen value
+moves in the eighth digit; read `1.35d-3` as a single and the helium value does.
+Verified by mutation: reading everything as a double fails nitrogen's pin and
+nothing else (`7.249792566886474E-03` for `7.249792657180476E-03`); reading
+everything as a single fails helium's (`1.350000035017729E-03`) and nitrogen's
+as well, through the `d0` header constants its combining rule uses.
+
+**The reader stops one factor short, and `ljparm` finishes the expression.** The
+compiled expressions were `dsqrt(eogas*0.4020)*conve*xe` and `3.0126d0*1.0d-10`,
+evaluated left to right. `ljread` stores `dsqrt(eogas*e)*conve` (or the bare
+literal, for the pair form) in `teps`, and `ljparm` multiplies by `xe` per atom;
+likewise `tsig` and `1.0d-10`. Same operations in the same order, so the same
+double. Do not fold the final factor into the table.
+
+**Two files with different forms, one reader.** The helium file is `form: pair`
+(He–X pair parameters used as they stand), the nitrogen file `form: combining`
+(X–X self parameters through the geometric-mean rule, with `eogas`, `rogas`,
+`conve` and `convr` in its header — `conve: 4.2d0*0.01036427d0`, still 0.382 %
+high, still not to be corrected). The reader applies the form the file declares
+and refuses a file whose `gas:` is not the binary's. Chunk 3's argument against
+one subroutine — that merging the tables would invent a conversion — does not
+apply to a reader that does what the file says: a helium binary handed the
+nitrogen file is refused, not converted.
+
+**Tokens are split by hand.** A `/` ends a list-directed record and a `,` splits
+one, and a row's provenance text can contain anything, so `ljtok` finds
+blank-delimited tokens and `ljnum` converts each with an internal read of that
+token alone, after rejecting any character a literal cannot contain — a
+list-directed read would take `1.0x` as `1.0`. One `/` or `*` is allowed inside
+a token, for sodium's `3.97d0/1.12246d0` and for `conve`.
+
+**The two warnings are flags in the file, not element identities in the code.**
+`lj` is `fitted` or `provisional` (format 603), `rhs` is `own` or `borrowed`
+(format 604). The legacy nitrogen, oxygen and fluorine rows are `own` although
+their 2.7 Å is carbon's, because they never warned and choline must not start
+to; the history is in their provenance text. `test/elements.sh` still pins the
+counts v1.1 decided (He 8/6, N2 0/12) *and* now checks the program's counts
+against the file's own flag columns, so editing a flag moves one of the two.
+
+**Loader refusals precede the banner, and that is the one place the banner does
+not come first.** The banner's second half is the file's `set:` string. So a
+missing, wrong-gas or malformed file produces an output file that starts with
+the refusal. Every other refusal still has the banner above it, and
+`test/refusals.sh` asserts both.
+
+**The gates copy the file into their run directories and use the default
+lookup.** A POSIX `$ROOT` path in the 4th line of `mobcal.in` is not one a
+native Windows binary can open — measured, on the first attempt to write the
+wrong-gas case with an absolute path. `test/refusals.sh` exercises the 4th line
+with a relative path instead.
+
+**Byte identity was established row by row, not only on choline.** Before the
+Fortran table was deleted, a probe built from the v1.2 sources and one built
+from the file-backed sources dumped `eolj`, `rolj` and `rhs` as IEEE hex for
+every row of both files, on the three committed fixtures and on a generated
+one-atom-per-row fixture: identical, all 58 parameters, both gases. Then the
+regression gate, both gases, T3 byte-identical.
+
+## The one element table (v1.1 to v1.2)
+
+Chunk 3 made the table `ljparm` — one per source file, called by `fcoord` and by
+`ncoord` — so that adding, removing or editing an element row meant editing
+exactly one place per gas. v1.3 moved the rows out of the Fortran altogether;
+the reasoning below is kept because the merge history and the hazards it
+records are still the history of the numbers now in the two files.
+
+**It was one subroutine per file, not one shared between the two files, and that
+was not an oversight.** The two tables hold different quantities. `mobcal_He.f`
+held He–X *pair* parameters directly (`eolj(iatom)=1.3266d-3*xe`).
+`mobcal_N2.f` held X–X *self* parameters that pass through a combining rule
+with the gas (`dsqrt(eogas*0.0977)*conve*xe`). Merging them would have required
 inventing a conversion that does not exist in either source.
 
 `docs/parameters.md` derives every parameter in both tables and is the place to
@@ -355,20 +460,25 @@ Four things to know before editing it:
 **The single-precision literals are load-bearing.** `dsqrt(eogas*0.4020)`
 multiplies a double by a REAL(4) literal, so `0.4020` is rounded to single
 precision before the multiply. Writing it `0.4020d0` is a different number in
-the eighth digit and moves published output. Rows are copied verbatim.
+the eighth digit and moves published output. Rows are copied verbatim. The rule
+survives the move to `mobcal_N2.params` unchanged, because the reader reads
+`0.4020` as a REAL(4) — see *The element tables are files* above.
 
 **`eogas`, `rogas`, `conve` and `convr` belong to the subroutine now.** In
 `mobcal_N2.f` they were four plain locals assigned *inside* the per-atom loop,
 once per atom, in both copies of the table — eight lines of duplication on top
 of the table's own. They are in no COMMON block, so the shared subroutine had to
 either own them or receive them; it owns them, hoisted out of the loop, stated
+once. Since v1.3 they are four header lines of `mobcal_N2.params`, still stated
 once.
 
 **The `type not defined for atom number` refusal moved with the rows.** It is
 the `itest.eq.0` arm and it is inseparable from the `itest` mechanism, so there
 is now one copy of it per file rather than two. It is otherwise untouched —
 format 602 still uses `i3` and still truncates above 999 atoms, and it is still
-one of the eight bare `stop`s that exit 0.
+one of the eight bare `stop`s that exit 0. (Chunk 4 then widened it to `i4`,
+v1.2 made it exit 1, and v1.3 made its key list a write from the loaded table
+rather than a hardcoded string.)
 
 **Silicon in N2 was a real bug and the merge fixed it.** `ncoord`'s silicon row
 held **iron's ε and σ verbatim** — 0.0130 / 2.9120 against `fcoord`'s 0.4020 /
@@ -405,7 +515,8 @@ c      rolj(iatom)=3.85949064*0.890898718*1.0d-10
 
 — that `ncoord` did not. They are dead code, but they are the only surviving
 record of a different, non-combining parameterization, and a merge is the wrong
-moment to lose provenance. They live in `ljparm` now, still commented out.
+moment to lose provenance. They lived in `ljparm` through v1.2, still commented
+out, and are `#` lines under their rows in `mobcal_N2.params` now.
 
 ## Chunk 4 -- new elements, and two warnings
 
@@ -416,9 +527,10 @@ came from Iain Campuzano's `mobcal_He_moreatoms.f` and
 `mobcal_n2_093COFClBrIKCs_1Li_12N_043H.f`, taken from the first of each
 file's two (pre-chunk-3) table copies -- verified to agree with the second
 copy on every one of these keys, so unlike silicon this merge carries no
-latent divergence. `mobcal_He.f` now defines 12 keys, `mobcal_N2.f` 16;
-`grep -c '^ *itest=1$'` is the check that a stray second copy has not crept
-back in.
+latent divergence. `mobcal_He.f` now defines 12 keys, `mobcal_N2.f` 16.
+Through v1.2 `grep -c '^ *itest=1$'` was the check that a stray second copy had
+not crept back in; since v1.3, with no rows in the source, `test/elements.sh`
+requires that no `imass(iatom).eq.<key>` comparison survives there at all.
 
 Two things about the new rows are not visible in a normal run's output, so
 each gets a warning `ljparm` prints (to unit 8, i.e. into the `.out` file)
@@ -678,11 +790,13 @@ than raw output.
 
 ## The two array bounds
 
-`mobcal_limits.inc` holds both, and holds them once:
+`mobcal_limits.inc` holds both, and holds them once — and since v1.3 a third,
+the number of rows a parameter file may carry:
 
 ```
 parameter (len=1000)      ! atoms per conformer
 parameter (lcoord=100)    ! coordinate sets per input file
+parameter (ltab=64)       ! element rows per parameter file
 ```
 
 Before v1.1, `parameter (len=1000)` was written out fifteen times per source
@@ -696,7 +810,7 @@ Four things to know before editing it:
 `-std=legacy`, and not worth renaming: the name appears in every dimension
 expression in both files.
 
-**Both names must begin with `i`, `j`, `k` or `l`.** Every unit that includes the
+**All three names must begin with `i`, `j`, `k` or `l`.** Every unit that includes the
 file declares `implicit double precision (a-h,m-z)`, so a name beginning `m`–`z`
 would be typed REAL and become a non-integer array bound. This is why the
 conformer limit is `lcoord` and not `maxcrd`.
@@ -711,7 +825,9 @@ else the `parameter` line already came before its uses.
 directory. Verified rather than assumed, on Windows: building from the repository
 root and building the same source by absolute path from an unrelated working
 directory produce byte-identical binaries. `README.md`'s "one command per gas"
-still holds; what changed is that it now lists a required source file.
+still holds; what changed is that it now lists required source files — three
+includes since v1.3, `mobcal_ljread.inc` being a whole subroutine and its
+helpers rather than declarations, included after the last program unit.
 
 ## The one normalization the comparison applies
 

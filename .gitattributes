@@ -23,6 +23,7 @@
 # to the wildcard above.
 *.f         text eol=lf
 *.inc       text eol=lf
+*.params    text eol=lf
 *.out       text eol=lf
 *.mfj       text eol=lf
 *.in        text eol=lf

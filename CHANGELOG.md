@@ -3,6 +3,73 @@
 All notable changes to MOBCAL-2012. Versions are two-component, matching the
 repository's tags; `v2.0` is reserved for the first breaking change.
 
+## [1.3] — Unreleased
+
+The physics is untouched, and so is every number: the element tables leave
+the Fortran for two data files, and every parameter the program holds is bit
+for bit the one the compiled table gave it — checked on every row of both
+files, not only on the four elements choline contains.
+
+### Added
+
++ **`mobcal_He.params` and `mobcal_N2.params`**, the element tables as
+  plain-text files, one row per element: mass key, symbol, atomic mass,
+  the two Lennard-Jones numbers, hard-sphere radius, two status flags, and a
+  free-text provenance column naming where the row came from and which
+  reference covers it. The file declares its gas, its form (helium's rows are
+  He–X pair parameters used as they stand; nitrogen's are X–X self parameters
+  put through a combining rule whose four constants the file's header now
+  carries, `conve`'s deliberate 4.2 kJ/kcal included), and its parameter-set
+  version, which the banner and SUMMARY print from the file rather than from
+  a constant in the source. Every number is spelled exactly as the Fortran
+  spelled it, and that is the one rule for editing the file: a token without
+  a `d` exponent is read as single precision, as the compiler read the
+  literal, and `0.4020` is not `0.4020d0` in the eighth digit.
+  `docs/parameters.md` documents the format and the procedure for adding a
+  row.
++ **`mobcal_ljread.inc`**, the reader, one copy included by both sources, and
+  a fourth include file required to compile. It refuses — before the banner,
+  to the console and the output file, exit 1 — a table it cannot open, a
+  table written for the other gas, an unknown header key or form, a
+  malformed literal, a duplicate key, or more rows than `ltab` in
+  `mobcal_limits.inc` allows. There is no compiled-in fallback table.
++ **An optional fourth line of `mobcal.in`** naming the element table to read.
+  Absent or blank, the program looks for `mobcal_He.params` /
+  `mobcal_N2.params` in the current directory, the rule `mobcal.in` itself
+  follows, so a three-line `mobcal.in` from an earlier release still works.
+  The two shipped templates carry the line.
++ **`test/elements.sh` reads the table.** A generated fixture with one atom
+  per row of the file, in file order, is probed, and every row's well depth,
+  radius and hard-sphere radius as the program holds them are compared with
+  the file's, evaluated by the form the file declares; the mass of that ion
+  is compared with the sum of the file's masses; the two warning counts are
+  compared with the file's own flag columns; and the key list printed by the
+  undefined-element refusal is compared with the file's keys in order. Until
+  now the gate saw only the rows the committed fixtures contained. It also
+  requires that no `imass(iatom).eq.<key>` row survives in either source.
+  `test/refusals.sh` gains four cases per gas for the reader's refusals and
+  a control that reads the table through a relative fourth-line path.
+
+### Changed
+
++ **`ljparm` no longer holds a table.** It looks each mass key up in the
+  loaded table, sets the four per-atom quantities in the order the compiled
+  expressions used — the reader stops short of the final `*xe` and
+  `*1.0d-10`, which happen per atom as before — and prints the two warnings
+  from the row's flags rather than from a list of elements in the code. The
+  key list in the `type not defined for atom number` refusal is written from
+  the loaded table; v1.2 withdrew the claim that it could not drift, and now
+  it cannot.
++ **`verparm` is gone from both main programs.** The parameter-set version is
+  the `set:` header of the file the run used. `mobcal_He.params` says `2.1`
+  and `mobcal_N2.params` says `2.0`, so no banner line moved.
+
+**`sample-output/` did not move.** Both references are byte-identical before
+and after on all three tiers of `test/regression.sh`, and a probe comparing
+the IEEE bit patterns of all 58 parameters between the compiled table and the
+file-backed build found no difference on any fixture, including one carrying
+every row of each file.
+
 ## [1.2] — Unreleased
 
 ### Added

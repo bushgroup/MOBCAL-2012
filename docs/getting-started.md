@@ -10,11 +10,14 @@ instead of drifting out of sync with them.
 ## What you need
 
 + `mobcal_He.f`, `mobcal_N2.f` — the two Fortran 77 sources (He and N2 gas)
-+ `mobcal_limits.inc`, `mobcal_version.inc` — included by both, required to
-  compile
++ `mobcal_limits.inc`, `mobcal_version.inc`, `mobcal_ljread.inc` — included
+  by both, required to compile
++ `mobcal_He.params`, `mobcal_N2.params` — the element tables, one per gas,
+  read by the matching binary when it runs; keep each beside the binary (or
+  name its path on line 4 of `mobcal.in`)
 + `mobcal_He.in`, `mobcal_N2.in` — one template per gas, each naming the input
-  file, the output file, and the random-number seed for one run; copy the one
-  you want to `mobcal.in`, the fixed name the program reads
+  file, the output file, the random-number seed and the element table for one
+  run; copy the one you want to `mobcal.in`, the fixed name the program reads
 + `Choline.mfj` — the choline input used in the 2012 paper, and the shipped
   example of the `.mfj` format
 + `sample-output/Choline_He.out`, `sample-output/Choline_N2.out` — the
@@ -62,7 +65,10 @@ cp mobcal_He.in mobcal.in
 ```
 
 reads `mobcal.in` from the current directory under that fixed name, which in
-turn names the `.mfj` input file, the output file, and the random-number seed.
+turn names the `.mfj` input file, the output file, the random-number seed
+and, on an optional fourth line, the element table to read — without that
+line the program looks for `mobcal_He.params` or `mobcal_N2.params` in the
+current directory, and refuses to run if it is not there.
 There is one template per gas rather than one shared `mobcal.in`, since the
 program's fixed filename would otherwise make a helium and a nitrogen run in
 the same directory overwrite each other's output — copy `mobcal_He.in` or
@@ -96,7 +102,8 @@ common case.
   non-ambient temperature.
 + Validated to 1,000 atoms and 100 coordinate sets — see *Size limits* in
   `README.md`.
-+ Supports the elements listed in *Supported elements* in `README.md`, and
++ Supports the elements listed in *Supported elements* in `README.md` — the
+  rows of the `.params` file the run reads — and
   refuses cleanly, naming what it needs, if your input uses one it doesn't
   know. Every refusal writes its reason to the console as well as to the
   output file and exits with status 1, so a batch script can tell a refused

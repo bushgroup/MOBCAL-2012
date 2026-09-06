@@ -85,15 +85,21 @@ c
       include 'mobcal_limits.inc'
       include 'mobcal_version.inc'
 c
-c     The version of the nitrogen parameter table, versioned separately
-c     from the code because the nitrogen and helium tables are revised
-c     independently -- see mobcal_version.inc.  2.0 is the table as of
-c     v1.1: the ten elements this file shipped with, silicon corrected
-c     from iron's row in NCOORD, plus chlorine, bromine, iodine,
-c     lithium, potassium and caesium.
+c     The version of the nitrogen parameter table is read from
+c     mobcal_N2.params -- its set: header -- by LJREAD below, into
+c     tset(1:lset), and printed in the banner and the SUMMARY.  It is
+c     versioned separately from the code because the nitrogen and helium
+c     tables are revised independently -- see mobcal_version.inc.  2.0
+c     is the table as of v1.1: the ten elements this file shipped with,
+c     silicon corrected from iron's row in NCOORD, plus chlorine,
+c     bromine, iodine, lithium, potassium and caesium.  Moving the table
+c     out of this file in v1.3 changed no value and so did not move it.
 c
-      character*(*) verparm
-      parameter (verparm='2.0')
+      character*16 tset
+      character*256 pfile
+      common/ljtable/tmass(ltab),teps(ltab),tsig(ltab),trhs(ltab),
+     ?ikey(ltab),iprov(ltab),iborr(ltab),itab,lset
+      common/ljtablc/tset
       dimension tmc(lcoord),tmm(lcoord),ehsc(lcoord),ehsm(lcoord),
      ?pac(lcoord),pam(lcoord),asympp(lcoord)
       character*30 filen1,filen2,unit,dchar,xlabel
@@ -118,6 +124,8 @@ c
 c     1. file for input
 c     2. file for output
 c     3. random number seed
+c     4. parameter file (optional, since v1.3; the default is
+c        mobcal_N2.params in the current directory)
 c
 c     filen1='gly3h1'
 c     filen2='temp.out'
@@ -129,17 +137,33 @@ c
       read(20,'(a30)') filen1
       read(20,'(a30)') filen2
       read(20,*) i2
+c
+c     Line 4, if present, names the parameter file.  A three-line
+c     mobcal.in from an earlier release hits end= and keeps the default,
+c     which is the per-gas file under its shipped name in the current
+c     directory -- the same rule mobcal.in itself follows.
+c
+      pfile=' '
+      read(20,'(a)',end=101) pfile
+  101 continue
       close (20)
+      if(pfile.eq.' ') pfile='mobcal_N2.params'
 c
 c     ***************************************************************
 c
       open (8,file=filen2)
 c
+c     Load the parameter file before anything else is written: its set:
+c     header is half of the banner below.  A refusal inside LJREAD is
+c     therefore the one refusal the banner does not precede.
+c
+      call ljread(pfile,'N2')
+c
 c     First line of the output file: which build wrote it, and which
 c     parameter table it used.  Printed here rather than from FCOORD so
-c     that it precedes everything, including a refusal.
+c     that it precedes everything else, including every later refusal.
 c
-      write(8,599) vercode,verparm
+      write(8,599) vercode,tset(1:lset)
   599 format(1x,'MOBCAL ',a,' (mobcal_N2.f), N2 parameter set ',a)
 c
 c     print switches ip=1  print scattering angles
@@ -366,7 +390,7 @@ c
 c
 c     print out summary
 c
-      write(8,605) vercode,verparm,filen1,xlabel
+      write(8,605) vercode,tset(1:lset),filen1,xlabel
   605 format(///1x,'SUMMARY',//1x,'program version = MOBCAL ',a,
      ?' (mobcal_N2.f)',/1x,'N2 parameter set = ',a,
      ?/1x,'input file name = ',a30,/1x,'input file label = ',a30)
@@ -734,289 +758,104 @@ c     ***************************************************************
 c
       subroutine ljparm(imass,xmass)
 c
-c     The per-element parameter table: atomic mass, Lennard-Jones well
-c     depth and radius, and hard-sphere radius, for every atom of the
-c     current coordinate set.  Refuses an element it does not know.
+c     The per-element parameters -- atomic mass, Lennard-Jones well depth
+c     and radius, hard-sphere radius -- for every atom of the current
+c     coordinate set, looked up by integer mass key in the table LJREAD
+c     loaded from the parameter file.  Refuses an element the file does
+c     not define.
 c
-c     One table, called by both FCOORD (coordinate set 1) and NCOORD
-c     (sets 2...icoord).  Before v1.1 it was written out twice per
-c     source file and the two copies had already diverged: NCOORD in
-c     mobcal_N2.f carried iron's well depth and radius under silicon's
-c     comment, so every conformer after the first of a multi-conformer
-c     nitrogen run containing silicon was computed with iron's
-c     parameters, and nothing in the output said so.  A subroutine
-c     rather than an include, because a subroutine can be called
-c     directly by a test and cannot silently diverge again.
+c     One lookup, called by both FCOORD (coordinate set 1) and NCOORD
+c     (sets 2...icoord).  Through v1.2 the table itself was written out
+c     here, and before v1.1 twice per source file -- the two copies had
+c     diverged, so that NCOORD in mobcal_N2.f gave silicon iron's values
+c     for every conformer after the first.  Since v1.3 the rows live in
+c     mobcal_He.params / mobcal_N2.params, read once at start-up by
+c     LJREAD (mobcal_ljread.inc); this routine only applies them.
 c
 c     imass and xmass are the caller's local arrays.  eolj, rolj and rhs
 c     are reached through COMMON, as they were before.
 c
-c     EVERY ROW IN THIS TABLE IS UFF.  Each is Rappe's universal force
-c     field x_I and D_I (ref 4) times one per-element scaling factor,
-c     combined with the gas by the geometric-mean rule below:
+c     teps(k) and tsig(k) hold the row's value short of the final factor:
+c     the reader stops at dsqrt(eogas*e)*conve (or at the bare literal,
+c     for the helium pair form) and the multiplication by xe and by
+c     1.0d-10 happens here, per atom, in the order the compiled
+c     expressions used.  That is what keeps every value bit for bit the
+c     one the Fortran table produced -- see docs/parameters.md.
 c
-c         eolj = sqrt(eogas * f*D_I) * conve * xe
-c         rolj = sqrt(rogas * f*x_I) * convr * 1.0d-10
-c
-c     The factors are 0.43 for hydrogen, 1.20 for nitrogen, 0.93 for
-c     carbon, oxygen, fluorine, chlorine, bromine, iodine, potassium
-c     and caesium, and 1.00 -- unscaled UFF -- for lithium, sodium,
-c     silicon, phosphorus, sulfur and iron.  Verified: every literal
-c     below reproduces f*D_I and f*x_I to five significant figures,
-c     the residual being the rounding of these four-decimal literals
-c     (potassium: 0.035*0.93 = 0.03255, written 0.0326).  Provenance
-c     is refs 1, 5 and 6.  docs/parameters.md has the full table.
-c
-c     THE PER-ROW PROVENANCE COMMENTS BELOW WERE NOT ABOUT THIS TABLE.
-c     "from fitting C60 mobility", the Viehland note on sodium, "from
-c     fitting mobilities of small silicon clusters", and every "(same
-c     as carbon)" and "(same as silicon)", describe the HELIUM pair
-c     parameters in mobcal_He.f; they were carried across when this
-c     table was written and say nothing true about a UFF row.  v1.1
-c     replaced each with the factor actually applied, keeping the
-c     original wording where it recorded something worth keeping.  The
-c     helium file still carries the originals, where they are correct.
-c
-c     eogas and rogas are unscaled UFF nitrogen (0.069, 3.660), so the
-c     buffer gas takes factor 1.00 while the ion's own nitrogen atoms
-c     take 1.20.  That asymmetry is in the fitted parameterization, not
-c     an oversight here.
-c
-c     conve is an approximate kcal/mol-to-eV conversion: it writes 4.2
-c     kJ/kcal where the exact figure is 4.184, so every well depth in
-c     this table is uniformly high by 4.2/4.184 = 1.0038241, or
-c     0.382 %.  DO NOT CORRECT IT.  It is inside every nitrogen result
-c     this code has published.  convr is 2**(-1/6), converting the UFF
-c     r_min to a Lennard-Jones sigma, which is what rolj is: the
-c     potential is 4*eps*(sigma^12/r^12 - sigma^6/r^6).
-c
-c     v1.1 chunk 4 added chlorine, bromine, iodine, lithium, potassium
-c     and caesium, by the same recipe as every other row here -- so
-c     unlike the He table's chlorine/bromine/iodine they carry no
-c     PROVISIONAL warning.  All six do borrow carbon's 2.7 Angstrom
-c     hard-sphere radius rather than carrying a fitted one; that prints
-c     a warning (format 604).  It does not fire for the ten legacy
-c     elements, even though three of those already carry the same
-c     2.7 Angstrom value.
+c     Two warnings, driven by the row's two flag columns rather than by
+c     element identity: format 603 for a `provisional' Lennard-Jones
+c     parameter (helium's Cl, Br, I and P -- UFF x 0.80, a construction
+c     no published source attests), format 604 for a hard-sphere radius
+c     `borrowed' from carbon rather than fitted.  Neither fires for a row
+c     flagged fitted/own, which includes the 2012 nitrogen, oxygen and
+c     fluorine rows that carry carbon's 2.7 Angstrom under their own
+c     "(same as carbon)" history: a warning keyed on the value would fire
+c     on choline and move sample-output/.
 c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
       dimension imass(len),xmass(len)
+      character*16 tset
+      character*(ltab*10) keys
+      character*8 buf
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
      ?xe,xeo,xk,xn,mconst,correct,romax,inatom,icoord,iic
       common/ljparameters/eolj(len),rolj(len),eox4(len),
      ?ro6lj(len),ro12lj(len),dro6(len),dro12(len)
       common/hsparameters/rhs(len),rhs2(len)
-c
-      eogas=0.06900d0
-      rogas=3.6600d0
-c     convert epsilon from kcal/mol to meV
-      conve=(4.2d0*0.01036427d0)
-      convr=0.890898718d0
+      common/ljtable/tmass(ltab),teps(ltab),tsig(ltab),trhs(ltab),
+     ?ikey(ltab),iprov(ltab),iborr(ltab),itab,lset
+      common/ljtablc/tset
 c
       do 2020 iatom=1,inatom
       itest=0
-c             
-c     hydrogen (UFF x 0.43).  The "average value of eo from ab initio
-c     calculations and ro from fitting mobilities of C6H6 and others"
-c     that stood here is mobcal_He.f's provenance, not this row's.
-
-      if(imass(iatom).eq.1) then
+      do 2010 k=1,itab
+      if(imass(iatom).eq.ikey(k)) then
       itest=1
-      xmass(iatom)=1.008d0
-      eolj(iatom)=dsqrt(eogas*0.0189)*conve*xe
-      rolj(iatom)=dsqrt(rogas*1.2409)*convr*1.0d-10
-      rhs(iatom)=2.2d0*1.0d-10
+      xmass(iatom)=tmass(k)
+      eolj(iatom)=teps(k)*xe
+      rolj(iatom)=tsig(k)*1.0d-10
+      rhs(iatom)=trhs(k)*1.0d-10
+      if(iprov(k).eq.1) write(8,603) iatom,imass(iatom)
+      if(iborr(k).eq.1) write(8,604) iatom,imass(iatom)
+      goto 2015
       endif
+ 2010 continue
+ 2015 continue
 c
-c     carbon (UFF x 0.93; the C60-mobility fit is mobcal_He.f's)
-c
-      if(imass(iatom).eq.12) then
-      itest=1
-      xmass(iatom)=12.01d0
-      eolj(iatom)=dsqrt(eogas*0.0977)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.5814)*convr*1.0d-10
-c      eolj(iatom)=0.139373598*xe
-c      rolj(iatom)=3.85949064*0.890898718*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     nitrogen (UFF x 1.20 -- the gas itself uses unscaled UFF
-c     nitrogen, eogas/rogas above)
-c
-      if(imass(iatom).eq.14) then
-      itest=1
-      xmass(iatom)=14.01d0
-      eolj(iatom)=dsqrt(eogas*0.0828)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.3920)*convr*1.0d-10
-c      eolj(iatom)=0.112982299*xe
-c      rolj(iatom)=3.762562956*0.890898718*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c     
-c     oxygen (UFF x 0.93)
-c
-      if(imass(iatom).eq.16) then
-      itest=1
-      xmass(iatom)=16.00d0
-      eolj(iatom)=dsqrt(eogas*0.0558)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.2550)*convr*1.0d-10
-c      eolj(iatom)=0.105356537*xe
-c      rolj(iatom)=3.679402125*0.890898718*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     sodium (UFF x 1.00, unscaled -- it pre-existed the scaling
-c     factors and was not re-optimized when they were fitted)
-c
-c     The Viehland provenance carried here from mobcal_He.f describes
-c     that file's He-Na+ row, not this one.  Kept for the record:
-c        Na+ from fitting potential derived by Viehland (Chem. Phys. 85
-c        (1984) 291) for Na+ + He interactions from mobility data. Note
-c        12-6-4 doesn't provide a very good fit to Viehland's potential.
-c        Viehland's potential is flatter at small r. We didn't include
-c        Viehland's first three points in the fit.  Hard sphere radius
-c        from fitting 300 K Na+ low field mobility in He.
-c
-      if(imass(iatom).eq.23) then
-      itest=1
-      xmass(iatom)=22.99d0
-      eolj(iatom)=dsqrt(eogas*0.03000)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9830)*convr*1.0d-10
-      rhs(iatom)=2.853d0*1.0d-10
-      endif
-c
-c     silicon (UFF x 1.00, unscaled.  This is the row v1.1 adopted;
-c     NCOORD's copy held UFF IRON, 0.0130/2.9120, verbatim.  The
-c     silicon-cluster fit is mobcal_He.f's provenance, not this row's)
-c
-      if(imass(iatom).eq.28) then
-      itest=1
-      xmass(iatom)=28.09d0
-      eolj(iatom)=dsqrt(eogas*0.4020)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.2950)*convr*1.0d-10
-      rhs(iatom)=2.95d0*1.0d-10
-      endif
-c
-c     sulfur (UFF x 1.00, unscaled)
-c
-      if(imass(iatom).eq.32) then
-      itest=1
-      xmass(iatom)=32.06d0
-      eolj(iatom)=dsqrt(eogas*0.2740)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.0350)*convr*1.0d-10
-c      eolj(iatom)=0.225144398*xe
-c      rolj(iatom)=3.950617673*0.890898718*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     iron (UFF x 1.00, unscaled)
-c
-      if(imass(iatom).eq.56) then
-      itest=1
-      xmass(iatom)=55.85d0
-      eolj(iatom)=dsqrt(eogas*0.0130)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.9120)*convr*1.0d-10
-      rhs(iatom)=3.5d0*1.0d-10
-      endif
-c
-c     Phosphorous (UFF x 1.00, unscaled)
-c
-      if(imass(iatom).eq.31) then
-      itest=1
-      xmass(iatom)=30.97d0
-      eolj(iatom)=dsqrt(eogas*0.305)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.1470)*convr*1.0d-10
-      rhs(iatom)=4.2d0*1.0d-10
-      endif
-c
-c     Flourine (UFF x 0.93)
-c
-      if(imass(iatom).eq.19) then
-      itest=1
-      xmass(iatom)=19.00d0
-      eolj(iatom)=dsqrt(eogas*0.0465)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.1285)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      endif
-c
-c     chlorine (UFF x 0.93)
-c
-      if(imass(iatom).eq.35) then
-      itest=1
-      xmass(iatom)=35.00d0
-      eolj(iatom)=dsqrt(eogas*0.2111)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.6707)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      write(8,604) iatom,imass(iatom)
-      endif
-c
-c     iodine (UFF x 0.93)
-c
-      if(imass(iatom).eq.127) then
-      itest=1
-      xmass(iatom)=127.00d0
-      eolj(iatom)=dsqrt(eogas*0.3153)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.1850)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      write(8,604) iatom,imass(iatom)
-      endif
-c
-c     bromine (UFF x 0.93)
-c
-      if(imass(iatom).eq.80) then
-      itest=1
-      xmass(iatom)=80.00d0
-      eolj(iatom)=dsqrt(eogas*0.2334)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.8957)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      write(8,604) iatom,imass(iatom)
-      endif
-c
-c     lithium (UFF x 1.00, unscaled -- no factor was fitted for it)
-c
-      if(imass(iatom).eq.7) then
-      itest=1
-      xmass(iatom)=7.00d0
-      eolj(iatom)=dsqrt(eogas*0.0250)*conve*xe
-      rolj(iatom)=dsqrt(rogas*2.4510)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      write(8,604) iatom,imass(iatom)
-      endif
-c
-c     potassium (UFF x 0.93)
-c
-      if(imass(iatom).eq.39) then
-      itest=1
-      xmass(iatom)=39.00d0
-      eolj(iatom)=dsqrt(eogas*0.0326)*conve*xe
-      rolj(iatom)=dsqrt(rogas*3.5456)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      write(8,604) iatom,imass(iatom)
-      endif
-c
-c     caesium (UFF x 0.93)
-c
-      if(imass(iatom).eq.133) then
-      itest=1
-      xmass(iatom)=133.00d0
-      eolj(iatom)=dsqrt(eogas*0.0419)*conve*xe
-      rolj(iatom)=dsqrt(rogas*4.2008)*convr*1.0d-10
-      rhs(iatom)=2.7d0*1.0d-10
-      write(8,604) iatom,imass(iatom)
-      endif
+c     The refusal names the key given, the nint(atomic weight) convention
+c     and the keys the file defines -- written from the loaded table, so
+c     the list cannot drift from the rows.  i4 rather than i3, so that a
+c     refusal past atom 999 prints the real number.
 c
       if(itest.eq.0) then
-      write(8,602) iatom,imass(iatom)
+      lk=0
+      do 2016 k=1,itab
+      write(buf,'(i8)') ikey(k)
+      ib=1
+ 2017 if(buf(ib:ib).eq.' ') then
+      ib=ib+1
+      goto 2017
+      endif
+      if(k.gt.1) then
+      keys(lk+1:lk+1)=','
+      lk=lk+1
+      endif
+      keys(lk+1:lk+9-ib)=buf(ib:8)
+      lk=lk+9-ib
+ 2016 continue
+      write(8,602) iatom,imass(iatom),keys(1:lk)
   602 format(1x,'type not defined for atom number',i4,
      ?' (mass key',i4,').'/
      ?1x,'element keys are nint(atomic weight); defined keys:'/
-     ?1x,'1,7,12,14,16,19,23,28,31,32,35,39,56,80,127,133')
-      write(6,602) iatom,imass(iatom)
+     ?1x,a)
+      write(6,602) iatom,imass(iatom),keys(1:lk)
       close (8)
       call exit(1)
       endif
 c
+  603 format(1x,'WARNING: provisional parameter used for atom',i4,
+     ?' (mass key',i4,'); see README.')
   604 format(1x,'WARNING: hard-sphere radius for atom',i4,
      ?' (mass key',i4,') borrowed from carbon.')
 c
@@ -3064,3 +2903,7 @@ c
 c
 c     ***************************************************************
 c
+c     The parameter-file reader: LJREAD and its three helpers, one copy
+c     shared with the other source file.
+c
+      include 'mobcal_ljread.inc'

@@ -48,6 +48,12 @@
 #   MOBIL2   Problem orientating along x axis    failure, mid-calculation
 #   MOBIL2   ibst greater than 500               failure, mid-calculation
 #
+# v1.3 added a family of refusals in LJREAD (mobcal_ljread.inc, included by
+# both files): the parameter file missing, for the other gas, or malformed.
+# They fire before the version banner -- the banner's second half is the
+# set: string that file supplies -- and three of them are driven below, with
+# a control that gets past LJREAD by a relative 4th-line path.
+#
 # mobcal_N2.f's energy-conservation block, the GSANG one, is commented out in
 # the source as it shipped, which is why that file has seven and not eight. The
 # gate asserts that it is still commented out rather than silently running one
@@ -226,6 +232,10 @@ for gas in $GASES; do
 
     d="$WORK/$gas"
     mkdir -p "$d"
+    # The element table the binary and the probe read at start-up (v1.3),
+    # under its fixed per-gas name in the run directory.
+    params=$(params_for "$src")
+    cp "$ROOT/$params" "$d/"
     echo "=== $gas ============================================================"
     echo "  building     : $FC $FFLAGS $LDFLAGS -o mobcal_$gas $src"
     # shellcheck disable=SC2086
@@ -255,6 +265,11 @@ for gas in $GASES; do
         bare_stops "$ROOT/$src" | sed 's/^/      bare stop at line /'
         check "and it is in the main program" n
     fi
+    # Both files include the parameter-file reader (v1.3), so a bare stop
+    # there would be a bare stop in both binaries.
+    n_inc=$(bare_stops "$ROOT/mobcal_ljread.inc" | wc -l | tr -d ' ')
+    check "and none in mobcal_ljread.inc, which both files include (found $n_inc)" \
+          "$(status "$n_inc" 0)"
 
     # The one termination that differs between the two files. Asserting it here
     # means re-enabling it in mobcal_N2.f fails this gate, rather than quietly
@@ -328,6 +343,69 @@ for gas in $GASES; do
         esac
     done
 
+    # --- the parameter file (v1.3) ------------------------------------------
+    #
+    # LJREAD adds refusals of its own, before the version banner, since the
+    # banner's second half is the set: string the file was to supply. Three
+    # are driven here through the real binary on type.mfj, whose own refusal
+    # (the undefined mass key) lies past LJREAD: so if LJREAD refuses, the
+    # file is what stopped the run, and if it does not, the mass-key refusal
+    # is what says the run got past it. The cases: no file where the program
+    # looks (no 4th line, and the run directory's copy moved aside); a 4th
+    # line naming the other gas's file; and a copy of the right file with one
+    # literal spoilt. The fourth case is the control -- a relative 4th-line
+    # path to a correct copy in a subdirectory -- and must reach the mass-key
+    # refusal with the banner printed. Relative paths throughout: a POSIX
+    # $ROOT path is not one a native Windows binary can open.
+    other=$(case "$gas" in he) echo mobcal_N2.params ;; *) echo mobcal_He.params ;; esac)
+    cp "$ROOT/$other" "$d/"
+    awk '!done && $1 == "1" && $2 == "H" { sub(/2\.2d0/, "2.2x0"); done = 1 } { print }' \
+        "$ROOT/$params" > "$d/bad.params"
+    mkdir -p "$d/sub"
+    cp "$ROOT/$params" "$d/sub/"
+
+    for case_name in params-missing params-gas params-bad params-path; do
+        out="$case_name.out"
+        case "$case_name" in
+        params-missing)
+            mv "$d/$params" "$d/$params.away"
+            printf '%s\n%s\n%s\n' type.mfj "$out" 96 > "$d/mobcal.in"
+            re='ERROR: cannot open parameter file' ;;
+        params-gas)
+            printf '%s\n%s\n%s\n%s\n' type.mfj "$out" 96 "$other" > "$d/mobcal.in"
+            re='ERROR: parameter file .*: this file is for gas' ;;
+        params-bad)
+            printf '%s\n%s\n%s\n%s\n' type.mfj "$out" 96 bad.params > "$d/mobcal.in"
+            re='ERROR: parameter file bad.params, line +[0-9]+: column 6' ;;
+        params-path)
+            printf '%s\n%s\n%s\n%s\n' type.mfj "$out" 96 "sub/$params" > "$d/mobcal.in"
+            re='type not defined for atom number +2 \(mass key +99\)' ;;
+        esac
+        if ( cd "$d" && "./mobcal_$gas" > "$case_name.stdout" 2>&1 ); then
+            st=0
+        else
+            st=$?
+        fi
+        [ "$case_name" = params-missing ] && mv "$d/$params.away" "$d/$params"
+        O="$d/$out"
+        S="$d/$case_name.stdout"
+        [ -f "$O" ] || : > "$O"
+        [ -f "$S" ] || : > "$S"
+        echo "  --- $case_name (exit $st) ---"
+        check "exit status is nonzero"              "$(nonzero "$st")"
+        check "the message is in the output file"   "$(present "$re" "$O")"
+        check "the message reaches the console too" "$(present "$re" "$S")"
+        check "no cross section was printed"        "$(absent 'cross section' "$O")"
+        case "$case_name" in
+        params-path)
+            check "the banner was printed, so the file was read from the 4th-line path" \
+                  "$(present 'parameter set' "$O")" ;;
+        *)
+            check "no banner: the refusal came from the reader, before it" \
+                  "$(absent 'parameter set' "$O")" ;;
+        esac
+    done
+
     # --- the refusal that needs the probe ---------------------------------
 
     if ! strip_subprograms "$ROOT/$src" "$d/subs.f"; then
@@ -335,7 +413,7 @@ for gas in $GASES; do
         FAILED=1
         continue
     fi
-    cp "$ROOT/mobcal_limits.inc" "$d/"
+    stage_probe_includes "$ROOT" "$d"
     write_driver "$ROOT/$src" "$d/ljprobe.f"
     # shellcheck disable=SC2086
     if ! ( cd "$d" && "$FC" $FFLAGS $LDFLAGS -o ljprobe subs.f ljprobe.f ) \

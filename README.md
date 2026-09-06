@@ -23,7 +23,9 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 + `mobcal_N2.f` Fortran 77 source code
 + `mobcal_limits.inc` The compiled-in array bounds, included by both sources. **Required to compile**, and the one file to edit if you need larger limits
 + `mobcal_version.inc` The release version of the code, included by both sources. **Required to compile**
-+ `mobcal_He.in`, `mobcal_N2.in` Parameter files, one per gas. Each sets the input file name, the output file name, and the random-number seed; copy the one for your gas to `mobcal.in` before running, since the program always reads that fixed name
++ `mobcal_ljread.inc` The reader for the two element-table files below, included by both sources. **Required to compile**
++ `mobcal_He.params`, `mobcal_N2.params` The element tables, one per gas: for every element the program knows, its mass key, atomic mass, Lennard-Jones parameters, hard-sphere radius, and where each number came from. **Required at run time** — each binary reads its own at start-up, from the current directory or from the path on line 4 of `mobcal.in`, and refuses to run without it. Plain text, meant to be read and cited; see *Supported elements* below and `docs/parameters.md`
++ `mobcal_He.in`, `mobcal_N2.in` Run-control files, one per gas. Each sets the input file name, the output file name, the random-number seed and the element table to read; copy the one for your gas to `mobcal.in` before running, since the program always reads that fixed name
 + `Choline.mfj` Input file used for choline in [1]
 + `sample-output/Choline_He.out` Output file for choline in He gas
 + `sample-output/Choline_N2.out` Output file for choline in N2 gas
@@ -31,7 +33,7 @@ We reported versions of MOBCAL optimized for calculating the mobilities of drug-
 ### Documentation
 + `docs/getting-started.md` An in-repository refresh of the original emailed guide, `N2_Mobcal_Getting_Started.pdf`
 + `docs/mfj-format.md` The `.mfj` input format precisely: every line, the element-key convention, and the charge-mode differences between the two gases
-+ `docs/parameters.md` Where every Lennard-Jones and hard-sphere parameter in both tables came from, with the arithmetic to re-derive each one
++ `docs/parameters.md` The format of the two `.params` files, where every Lennard-Jones and hard-sphere parameter in them came from, with the arithmetic to re-derive each one, and how to add an element
 + `tools/xyz2mfj.py` Optional, dependency-free converter from plain XYZ coordinates to a `.mfj` file. Not part of the build and not covered by the four gates
 
 The two files under `sample-output/` are also the fixtures the regression gate
@@ -47,7 +49,7 @@ stochastic diagnostic, is unchanged from the published files.
 + `CLAUDE.md` Contributor notes: the four gates, line endings, and build flags
 + `test/regression.sh` Regression gate. Builds both sources, runs `Choline.mfj` at the seed recorded in the reference outputs, and compares the result against `sample-output/`
 + `test/bounds.sh` Array-bound gate. Checks that an input exceeding either compiled-in limit is refused with a message naming the limit and the actual count, and exits nonzero
-+ `test/elements.sh` Element-table gate. Builds a probe against the real coordinate-reading subroutines and checks that every atom gets the same Lennard-Jones and hard-sphere parameters in every coordinate set
++ `test/elements.sh` Element-table gate. Builds a probe against the real coordinate-reading subroutines and checks that every atom gets the same Lennard-Jones and hard-sphere parameters in every coordinate set, and that what the program holds for every row of a `.params` file is what the file says
 + `test/refusals.sh` Exit-status gate. Checks that every refusal and every detected failure exits nonzero, with its message on the console as well as in the output file, and that the normal end of the main program is the only bare Fortran `stop` left in either source
 + `test/probe-driver.sh` The generated test driver that calls the coordinate-reading subroutines directly, in the one place it is written down. Sourced by the element-table and exit-status gates
 + `test/silicon-2conf.mfj` The element gate's input: two identical coordinate sets containing silicon
@@ -84,12 +86,16 @@ gfortran -O3 -fno-automatic -std=legacy -static -o mHe.exe mobcal_He.f
 `gfortran` is part of GCC: available from every Linux package manager, from
 Homebrew on macOS, and from MSYS2 on Windows.
 
-Each source `include`s `mobcal_limits.inc` and `mobcal_version.inc`, so both
-files have to be present alongside it — but they do not change the command.
-`gfortran` resolves an `include` relative to the directory of the source file, so
-building either source by absolute path from an unrelated working directory
-produces a byte-identical binary. The build is still one compiler invocation with
-nothing to install.
+Each source `include`s `mobcal_limits.inc`, `mobcal_version.inc` and
+`mobcal_ljread.inc`, so all three files have to be present alongside it — but
+they do not change the command. `gfortran` resolves an `include` relative to
+the directory of the source file, so building either source by absolute path
+from an unrelated working directory produces a byte-identical binary. The build
+is still one compiler invocation with nothing to install.
+
+The binary then needs one more file when it *runs*: its element table,
+`mobcal_He.params` or `mobcal_N2.params`. Since v1.3 the table is not compiled
+in — see *Run the compiled code* below for how the program finds it.
 
 **These are the flags the continuous-integration matrix uses** — three platforms,
 both gases, compared against the reference outputs under `sample-output/`.
@@ -260,7 +266,8 @@ sh test/elements.sh --gas he
 ```
 
 Each atom's Lennard-Jones and hard-sphere parameters are looked up by integer
-mass from a table in the source. Those parameters never appear in the output
+mass in the table read from `mobcal_He.params` / `mobcal_N2.params` (through
+v1.2, a table in the source). Those parameters never appear in the output
 file for any coordinate set after the first, so this gate calls the
 coordinate-reading subroutines directly and reads the values back out. It runs
 an input of two identical coordinate sets and requires every atom to come out of
@@ -307,8 +314,16 @@ The program takes no arguments, and prints nothing to the console unless it
 refuses the input or abandons the calculation — everything else goes to the
 output file. It reads
 `mobcal.in` from the current directory under that fixed name, which names
-three things on three lines: the `.mfj` input file, the output file to write,
-and the random-number seed. There is no single shipped `mobcal.in`, because the
+four things on four lines: the `.mfj` input file, the output file to write,
+the random-number seed, and the element table to use. The fourth line is
+optional. Without it — a three-line `mobcal.in` from an earlier release still
+works — the program looks for `mobcal_He.params` (or `mobcal_N2.params`) in the
+current directory, the same rule it applies to `mobcal.in` itself; with it, any
+path up to 256 characters, relative or absolute. A run that cannot open its
+element table refuses, naming the file it looked for, before writing anything
+else. There is no compiled-in fallback table, on purpose: a fallback that
+quietly differed from the file would be a silent change of parameters.
+There is no single shipped `mobcal.in`, because the
 program's own fixed filename would otherwise make a helium run and a nitrogen
 run in the same directory overwrite each other's output; instead there is one
 template per gas, `mobcal_He.in` and `mobcal_N2.in`, and you copy the one you
@@ -351,7 +366,8 @@ if ./mHe; then echo "ok"; else echo "refused or abandoned"; fi
 
 That covers refusals — an unrecognized `units` or charge keyword, an element the
 table does not define, an input past either array bound, a conformer whose
-composition does not match the first one's — and it covers the failures the
+composition does not match the first one's, an element table that is missing,
+written for the other gas, or malformed — and it covers the failures the
 program detects in its own arithmetic, chiefly the cap on trajectories that do
 not conserve energy to within 1 %. That cap is a helium-build behaviour: the
 same check exists in `mobcal_N2.f` but is commented out in the source as it
@@ -405,9 +421,16 @@ coordinates to a `.mfj` file, optionally.
 ### Supported elements
 
 Each atom in an input file is identified by an integer mass key --
-`nint` of its atomic weight -- looked up in a table in the source. An
+`nint` of its atomic weight -- looked up in the element table the program
+reads at start-up, `mobcal_He.params` or `mobcal_N2.params`. An
 unrecognized key is refused, naming the atom, the key you gave, the
-`nint(atomic weight)` convention, and the keys the build actually knows.
+`nint(atomic weight)` convention, and the keys the table actually defines
+(that list is written from the table it just read, so it cannot be stale).
+Since v1.3 the table is a plain-text file rather than a block of Fortran, so
+its rows can be read, cited and — with care — extended without touching the
+source or rebuilding; `docs/parameters.md` describes the format, the one
+precision rule that must be respected when editing it, and the procedure for
+adding an element.
 Chlorine, bromine, iodine, lithium, potassium and caesium carry that key
 itself as the stored atomic mass rather than a four-figure weight, on purpose,
 to match the contributor's own files -- `docs/parameters.md` *Atomic masses*
@@ -418,12 +441,14 @@ has the reasoning and its (small) cost.
 | He | 2.1 | 1, 12, 14, 16, 19, 23, 28, 31, 32, 35, 56, 80, 127 |
 | N2 | 2.0 | 1, 7, 12, 14, 16, 19, 23, 28, 31, 32, 35, 39, 56, 80, 127, 133 |
 
-The parameter set is the version each output file's banner names. Set 1.0 is the
+The parameter set is the version each output file's banner names, read from
+the `set:` line of the table the run used. Set 1.0 is the
 table published with [1]: nine elements in helium, ten in nitrogen. Nitrogen's
-set 2.0 is this release's — six new elements and the silicon correction. Helium
+set 2.0 is v1.1's — six new elements and the silicon correction. Helium
 went to 2.0 for three new elements and then to 2.1 for phosphorus; no existing
 row's values changed in either step. The two move independently, which is why
-they are two version strings and not one.
+they are two version strings and not one. Moving the tables into files in v1.3
+changed no value, so neither moved.
 
 Every row of `mobcal_N2.f`'s table is Rappé's universal force field [4]
 scaled by one factor per element -- 0.93 for carbon, oxygen, fluorine and the
@@ -465,9 +490,10 @@ construction rests on a factor no published source attests, so the row is
 offered as a construction and labelled as one -- not as a measurement.
 
 `docs/parameters.md` derives every parameter in both tables from its
-source. `CLAUDE.md`'s *The one element table* has the file-and-line
-detail, and `test/new-elements-he.mfj` / `test/new-elements-n2.mfj` are
-what `test/elements.sh` runs both warnings against.
+source and documents the file format. `CLAUDE.md`'s *The element tables
+are files* has the contributor detail, and `test/new-elements-he.mfj` /
+`test/new-elements-n2.mfj` are what `test/elements.sh` runs both warnings
+against.
 
 ### Size limits
 

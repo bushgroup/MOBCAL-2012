@@ -223,6 +223,9 @@ for gas in $GASES; do
 
     d="$WORK/$gas"
     mkdir -p "$d"
+    # The element table the binary reads at start-up (v1.3), under its fixed
+    # per-gas name in the run directory.
+    cp "$ROOT/${src%.f}.params" "$d/"
     echo "=== $gas ============================================================"
     echo "  building     : $FC $FFLAGS $LDFLAGS -o mobcal_$gas $src"
     # shellcheck disable=SC2086

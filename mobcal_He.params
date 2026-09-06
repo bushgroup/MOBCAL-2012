@@ -1,0 +1,74 @@
+# mobcal_He.params -- the helium element table of MOBCAL-2012.
+#
+# Read at run time by mobcal_He.f (the reader is mobcal_ljread.inc).  The
+# program takes the file's name from line 4 of mobcal.in, or looks for
+# this name in the current directory when that line is absent or blank.
+# docs/parameters.md documents the format and derives every number here;
+# README.md "Supported elements" is the user-facing summary.
+#
+# THE NUMBERS ARE WRITTEN EXACTLY AS THE FORTRAN SOURCE WROTE THEM through
+# v1.2, and are read with the kind Fortran gives the literal: a token with
+# a d exponent is double precision, a token without one is SINGLE
+# precision, promoted after the read.  That rule reproduces every value
+# the compiled table produced, bit for bit.  Do not "tidy" 1.35d-3 into
+# 1.35e-3 or 3.5d0 into 3.5 -- either is a different number and moves
+# published output.  One / or one * is permitted inside a number, for the
+# one row (sodium) that was an expression in the source.
+#
+# Comments run from # to end of line; blank lines are ignored.  Header
+# lines are "key: value" and come before the rows.  An element row is
+# eight columns, then | and free-text provenance to end of line:
+#
+#   key    integer mass key, nint(atomic weight), as in the .mfj file
+#   elem   symbol, for the reader's eye; the program does not check it
+#   mass   atomic mass used for the ion's mass and centre of mass
+#   eps    Lennard-Jones well depth, eV      -> eolj = eps * xe
+#   sigma  Lennard-Jones sigma, Angstrom     -> rolj = sigma * 1.0d-10
+#   rhs    hard-sphere radius, Angstrom      -> rhs  = rhs * 1.0d-10
+#   lj     fitted | provisional   (provisional prints a warning per atom)
+#   rhs    own | borrowed         (borrowed prints a warning per atom)
+#
+# "form: pair" -- these are He-X PAIR parameters used as they stand: sigma
+# is the sigma of 4*eps*(sigma^12/r^12 - sigma^6/r^6) and there is no
+# combining rule with the gas.  The nine 2012 rows are fits to helium
+# mobility data.  The four rows added in v1.1 (Cl, Br, I, P) are Rappe's
+# UFF x_I and D_I [4] scaled by 0.80 and inserted directly as pair
+# parameters, skipping both the geometric-mean combining rule and the
+# r_min-to-sigma factor 2**(-1/6) that mobcal_N2.params applies to the
+# same UFF numbers -- and the 0.80 is attested in none of [1], [5], [6],
+# all of which are nitrogen studies.  Hence "provisional".  "borrowed"
+# marks a hard-sphere radius taken from carbon's 2.7 Angstrom rather than
+# fitted; it matters only to the EHSS/PA calculation, and most for
+# iodine, whose own sigma (3.60 Angstrom) is larger than that radius.
+#
+# The hard-sphere radius is gas-independent in this code: every element
+# defined in both files carries the same rhs in both.
+#
+# Reference numbers [n] are README.md's.
+
+gas:  He
+form: pair
+set:  2.1
+
+# key elem mass       eps          sigma             rhs      lj           rhs       | provenance
+   1  H    1.008d0    0.6175d-03   2.2610d0          2.2d0    fitted       own       | eps: average of ab initio values; sigma: fit to mobilities of C6H6 and others (2012) [1]
+  12  C    12.01d0    1.3266d-3    3.0126d0          2.7d0    fitted       own       | fit to C60 mobility (2012) [1]
+  14  N    14.01d0    1.4740d-3    3.3473d0          2.7d0    fitted       own       | 2012 row; hard-sphere radius is carbon's ("same as carbon" in the 2012 source) [1]
+  16  O    16.00d0    1.0720d-3    2.4344d0          2.7d0    fitted       own       | 2012 row; hard-sphere radius is carbon's ("same as carbon" in the 2012 source) [1]
+  19  F    19.00d0    1.0720d-3    2.4344d0          2.7d0    fitted       own       | eps and sigma are a verbatim copy of oxygen's row, not a fluorine fit; hard-sphere radius carbon's (2012)
+
+# Sodium: Na+ from fitting the potential derived by Viehland (Chem. Phys.
+# 85 (1984) 291) for Na+ + He interactions from mobility data.  Note 12-6-4
+# doesn't provide a very good fit to Viehland's potential.  Viehland's
+# potential is flatter at small r.  We didn't include Viehland's first
+# three points in the fit.  Hard sphere radius from fitting 300 K Na+ low
+# field mobility in He.  sigma is r_min = 3.97 Angstrom over 1.12246, an
+# approximation to 2**(1/6).
+  23  Na   22.99d0    0.0278d-3    3.97d0/1.12246d0  2.853d0  fitted       own       | Viehland Na+/He potential, see the note above (2012)
+  28  Si   28.09d0    1.35d-3      3.5d0             2.95d0   fitted       own       | fit to mobilities of small silicon clusters (2012)
+  31  P    30.97d0    10.580d-3    3.3176d0          4.2d0    provisional  own       | UFF [4] x 0.80: 0.305*0.80*43.360 = 10.57984 meV, 4.147*0.80 Angstrom; the halogens' construction, the 0.80 unattested; rhs is phosphorus's own 4.2 Angstrom from mobcal_N2.params (v1.1, set 2.1)
+  32  S    32.06d0    1.35d-3      3.5d0             3.5d0    fitted       own       | same as silicon (2012)
+  35  Cl   35.00d0    7.8742d-3    3.1576d0          2.7d0    provisional  borrowed  | UFF [4] x 0.80, inserted as a He-Cl pair parameter; the 0.80 is attested in none of [1], [5], [6]; hard-sphere radius carbon's (v1.1, set 2.0)
+  56  Fe   55.85d0    1.35d-3      3.5d0             3.5d0    fitted       own       | same as silicon (2012)
+  80  Br   80.00d0    8.7067d-3    3.3512d0          2.7d0    provisional  borrowed  | UFF [4] x 0.80, inserted as a He-Br pair parameter; the 0.80 is attested in none of [1], [5], [6]; hard-sphere radius carbon's (v1.1, set 2.0)
+ 127  I    127.00d0   11.759d-3    3.6000d0          2.7d0    provisional  borrowed  | UFF [4] x 0.80, inserted as a He-I pair parameter; the 0.80 is attested in none of [1], [5], [6]; hard-sphere radius carbon's, smaller than this sigma (v1.1, set 2.0)

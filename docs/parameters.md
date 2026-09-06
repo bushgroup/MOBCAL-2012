@@ -1,23 +1,85 @@
-# Where the Lennard-Jones parameters come from
+# The parameter files, and where every number in them comes from
 
-Every number in either source file's element table, and how to re-derive it.
-`CLAUDE.md`'s *The one element table* has the merge history and the editing
-hazards; this page is the provenance.
+Since v1.3 the element tables are two plain-text files, `mobcal_He.params` and
+`mobcal_N2.params`, read by the matching binary when it starts. This page
+documents the file format, derives every number in both files, and gives the
+procedure for adding an element. `CLAUDE.md`'s *The element tables are files*
+has the contributor-side reasoning and the editing hazards.
 
-The short version: **`mobcal_N2.f`'s table is UFF throughout**, and
-**`mobcal_He.f`'s is not** — its nine original rows are direct fits to helium
-mobility data, and the four added in v1.1 are UFF put through a different,
-undocumented transformation. That asymmetry is why the two tables are separate
-subroutines, separately versioned, and why only one of them prints a warning.
+The short version: **the nitrogen table is UFF throughout**, and **the helium
+table is not** — its nine original rows are direct fits to helium mobility
+data, and the four added in v1.1 are UFF put through a different, undocumented
+transformation. That asymmetry is why the two tables are separate files with
+different forms, separately versioned, and why only one of them prints a
+warning.
+
+## The file format
+
+A file is plain text: `#` starts a comment that runs to the end of the line,
+blank lines are ignored, header lines come first, and then one row per
+element. This is helium's carbon row, with the column header that precedes the
+rows in the file:
+
+```
+# key elem mass       eps          sigma             rhs      lj           rhs       | provenance
+  12  C    12.01d0    1.3266d-3    3.0126d0          2.7d0    fitted       own       | fit to C60 mobility (2012) [1]
+```
+
+A row is eight columns separated by blanks, then an optional `|` and free text
+to the end of the line — the provenance, which the program never reads.
+
+| column | meaning |
+|---|---|
+| key | the integer mass key, `nint` of the atomic weight — the number in the `.mfj` mass column |
+| elem | the symbol, for the reader's eye; not checked |
+| mass | the atomic mass the program uses for the ion's mass and centre of mass |
+| 4 and 5 | the two Lennard-Jones numbers, whose meaning depends on the file's `form:` — see below |
+| rhs | the hard-sphere radius in Å, used only by the EHSS/PA calculation |
+| lj | `fitted` or `provisional`; `provisional` prints a warning into the output file for every atom that uses the row |
+| rhs | `own` or `borrowed`; `borrowed` prints the other warning |
+
+Header lines are `key: value`. Every file declares `gas:` (`He` or `N2` — a
+binary refuses a file for the other gas), `form:` and `set:`, the parameter-set
+version the output banner prints. A `combining` file also declares the four
+constants of its combining rule.
+
+| `form:` | column 4 | column 5 | what the program computes |
+|---|---|---|---|
+| `pair` (helium) | ε in eV | σ in Å | `eolj = eps*xe`, `rolj = sigma*1.0d-10` |
+| `combining` (nitrogen) | `f·D_I` in kcal/mol | `f·x_I` in Å | `eolj = dsqrt(eogas*e)*conve*xe`, `rolj = dsqrt(rogas*s)*convr*1.0d-10` |
+
+**Every number is spelled exactly as the Fortran source spelled it through
+v1.2, and the spelling is the precision.** The program reads a token with a `d`
+exponent (`1.3266d-3`, `2.7d0`) as double precision and a token without one
+(`0.4020`, `0.305`) as **single** precision, promoted after the read — the kind
+the compiler gave the same literal. That rule reproduces every one of the 58
+values in the two files bit for bit; reading nitrogen's literals as doubles
+reproduces none of them. `0.4020d0` differs from `0.4020` in the eighth
+significant digit, and the published nitrogen output carries that eighth digit.
+So a row is copied, never tidied. One `/` or one `*` is allowed inside a number,
+for the one row (helium sodium's `3.97d0/1.12246d0`) and the one header value
+(`conve: 4.2d0*0.01036427d0`) that were expressions in the source.
+
+The reader refuses — before the version banner, since the banner's second
+half is the `set:` this file supplies; to the console and the output file;
+exit 1 — a file it cannot open, a file for the other gas, an unknown header
+key or form, a row with the wrong number of columns, a token that is not a
+Fortran literal, a duplicate key, a header line after the first row, and more
+rows than `ltab` in `mobcal_limits.inc` allows. There is no compiled-in table
+to fall back on.
+
+The program finds the file by the optional fourth line of `mobcal.in`, and
+without one looks for `mobcal_He.params` / `mobcal_N2.params` in the current
+directory — `README.md` *Run the compiled code*.
 
 ## The two tables hold different quantities
 
-| | `mobcal_He.f` | `mobcal_N2.f` |
+| | `mobcal_He.params` (`form: pair`) | `mobcal_N2.params` (`form: combining`) |
 |---|---|---|
 | what a row is | a He–X **pair** parameter, used as-is | an X–X **self** parameter, combined with the gas at run time |
-| `eolj` | ε in eV, written as `<mev>d-3*xe` | `sqrt(eogas · D) · conve · xe` |
-| `rolj` | σ in m, written as `<angstrom>d0*1.0d-10` | `sqrt(rogas · x) · convr · 1.0d-10` |
-| combining rule | none | geometric mean with the gas |
+| `eolj` | ε in eV, the row's `<mev>d-3` times `xe` | `sqrt(eogas · D) · conve · xe` |
+| `rolj` | σ in m, the row's `<angstrom>d0` times `1.0d-10` | `sqrt(rogas · x) · convr · 1.0d-10` |
+| combining rule | none | geometric mean with the gas; `eogas`, `rogas`, `conve`, `convr` in the file's header |
 
 `rolj` is σ in both files: the potential is `4ε(σ¹²/r¹² − σ⁶/r⁶)`, assembled
 in `dljpot` under the comment `c     LJ potential` out of the `eox4`, `ro6lj`
@@ -25,11 +87,13 @@ and `ro12lj` that `fcoord` and `ncoord` precompute from a row's ε and σ.
 Merging the two tables would mean inventing a conversion that exists in
 neither source.
 
-## `mobcal_N2.f`: UFF times one factor per element
+## `mobcal_N2.params`: UFF times one factor per element
 
 Each row is Rappé's universal force field [4] natural bond distance `x_I` and
 well depth `D_I`, multiplied by one scaling factor, fitted to reproduce
-experimental nitrogen collision cross sections [1, 5, 6].
+experimental nitrogen collision cross sections [1, 5, 6]. "In source" below is
+the literal as the Fortran carried it through v1.2 and as the file carries it
+now, unchanged.
 
 | key | element | factor | UFF `D_I` | in source | UFF `x_I` | in source |
 |---|---|---|---|---|---|---|
@@ -74,10 +138,10 @@ silicon exactly; `ncoord`'s 0.0130 / 2.9120, which the merge discarded, is UFF
 **iron** exactly. The value adopted is the right one on independent grounds, not
 merely on the grounds that published runs had used it.
 
-**`conve` is approximate, and must stay that way.**
+**`conve` is approximate, and must stay that way.** In the file's header:
 
 ```
-conve = 4.2d0 * 0.01036427
+conve: 4.2d0*0.01036427d0
 ```
 
 0.01036427 eV per kJ/mol is exact, but 4.2 kJ per kcal should be 4.184, so every
@@ -88,9 +152,10 @@ scaling factors above, which were obtained with it in place. `convr` alongside
 it is 2⁻¹ᐟ⁶ = 0.890898718, converting UFF's `x_I` (a minimum-energy distance) to
 a Lennard-Jones σ.
 
-The single-precision literals are also load-bearing — see `CLAUDE.md`.
+The single-precision literals are also load-bearing — see *The file format*
+above.
 
-## `mobcal_He.f`: nine helium fits, and four that are not
+## `mobcal_He.params`: nine helium fits, and four that are not
 
 The nine original rows are what their own comments say: hydrogen and carbon from
 mobility fits, sodium from Viehland's Na⁺–He potential, and so on. Nothing in
@@ -238,22 +303,29 @@ agreement with the contributor's own files to correct.
 
 ## Adding an element
 
-One row in `ljparm` per gas — one such subroutine per source file — and one
-entry in the format 602 key list a few lines below the rows. That list is a
-hardcoded string and no gate compares it against the rows, so check it by
-hand; each file should print the same line twice:
-
-```sh
-for f in mobcal_He.f mobcal_N2.f; do
-  awk '/^      subroutine ljparm/,/^      end$/' $f |
-    grep -o 'imass(iatom)\.eq\.[0-9]*' | grep -o '[0-9]*$' | sort -n | paste -sd,
-  grep -A4 "602 format(1x,'type not defined" $f | grep -o "'[0-9,]*'" | tr -d "'"
-done
-```
+One row in the `.params` file for that gas, in ascending key order, with its
+two flags set honestly and its provenance written in the last column; then a
+bump of the file's `set:` line, since the table changed (a pure addition moves
+the second component, as helium's 2.0 → 2.1 did for phosphorus). No source
+file changes and nothing is rebuilt. The key list in the undefined-element
+refusal is written from the loaded table, so it follows the rows by itself;
+through v1.2 it was a hardcoded string checked by hand.
 
 Then `test/elements.sh`, which reads the parameters back out of the real
 subroutines rather than out of the program's output, because for any
-coordinate set after the first they do not appear in the output at all.
+coordinate set after the first they do not appear in the output at all — and
+which, since v1.3, also generates a fixture with one atom per row of the file
+and checks every row's values as the program holds them against the file's, so
+a new row is exercised the moment it exists. Then `test/regression.sh`, whose
+whole-file tier must still pass: a row added to the file moves nothing in
+`sample-output/`, and if it does, something other than a row was changed.
+
+Two things to write correctly. **Spell the literal as Fortran would.** A
+nitrogen row's two numbers are single-precision literals — four decimals, no
+exponent — because every other row's are, and the combining rule was fitted
+with them read that way. A helium row's are double literals with a `d`
+exponent. Do not convert one form into the other. **Say which references
+cover the row.** Reference numbers in the provenance column are `README.md`'s.
 
 For nitrogen the recipe is settled: take UFF `x_I` and `D_I`, apply the factor
 for that element's class, write four decimals. For helium there is no settled

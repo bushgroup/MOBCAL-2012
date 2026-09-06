@@ -10,10 +10,19 @@
 #                               the first thing left is not FCOORD, which is
 #                               what says the main program and nothing else was
 #                               dropped.
-#   write_driver      SRC OUT   a generated main program that calls FCOORD for
-#                               coordinate set 1 and NCOORD for each set after
-#                               it, and dumps the per-element parameters each
-#                               call left in COMMON.
+#   write_driver      SRC OUT   a generated main program that loads the
+#                               parameter file as the real main program does,
+#                               calls FCOORD for coordinate set 1 and NCOORD
+#                               for each set after it, and dumps the
+#                               per-element parameters each call left in
+#                               COMMON.
+#   stage_probe_includes ROOT DIR
+#                               copies the include files the stripped source
+#                               needs beside it. gfortran resolves an include
+#                               relative to the including source, so the probe
+#                               directory has to hold its own copies.
+#   params_for        SRC       the parameter file the source reads by
+#                               default: mobcal_He.f -> mobcal_He.params.
 #
 # WHY THIS IS A FILE OF ITS OWN
 #
@@ -40,12 +49,30 @@
 # What the driver exercises is the real subroutines from the real source file.
 # There is no second copy of the element table, and no second copy of any
 # refusal, anywhere in it.
+#
+# Since v1.3 the element table is not in the source at all: LJPARM looks the
+# mass key up in the table LJREAD loaded from mobcal_He.params or
+# mobcal_N2.params. The driver therefore does what the real main program does
+# before it calls FCOORD -- reads the optional 4th line of mobcal.in and calls
+# LJREAD -- and the stripped source carries LJREAD with it, because the
+# `include 'mobcal_ljread.inc'` sits after the last subroutine in both files.
+# So a probe run needs the parameter file where the main program would look
+# for it, and the gates copy it into the run directory for that reason.
 
 # Everything from the first `subroutine' statement on. The main program is the
 # first program unit in both files and FCOORD is the second, so this drops
 # exactly the main program. If the file is ever restructured so that some other
 # subprogram comes first, this fails loudly instead of quietly compiling a
 # probe with a stowaway main program in it.
+stage_probe_includes() {
+    cp "$1/mobcal_limits.inc" "$1/mobcal_ljread.inc" "$2/"
+}
+
+params_for() {
+    b=$(basename "$1" .f)
+    echo "$b.params"
+}
+
 strip_subprograms() {
     sed -n '/^      subroutine /,$p' "$1" > "$2"
     if ! head -1 "$2" | grep -q '^      subroutine fcoord('; then
@@ -59,6 +86,8 @@ strip_subprograms() {
 write_driver() {
     src=$1
     out=$2
+    # The gas this source is built for, as LJREAD wants it: 'He' or 'N2'.
+    gasid=$(basename "$src" .f | sed 's/^mobcal_//')
     # The continuation line of common/constants/, lifted from the source under
     # test rather than restated here.
     constants=$(sed -n '/^      common\/constants\/mu,ro,eo,pi,cang/{
@@ -83,17 +112,30 @@ c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
       character*30 filen1,unit,dchar,xlabel
+      character*256 pfile
       common/printswitch/ip,it,iu1,iu2,iu3,iv,im2,im4,igs
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
 PROLOGUE
         echo "$constants"
-        cat <<'BODY'
+        cat <<BODY
       common/xrandom/i1,i2,i3,i4,i5,i6
+c
+c     mobcal.in as the real main program reads it: the input file name,
+c     two lines this probe has no use for, and the optional 4th line
+c     naming the parameter file.
 c
       open(20,file='mobcal.in')
       read(20,'(a30)') filen1
+      read(20,'(a30)') pfile
+      read(20,'(a30)') pfile
+      pfile=' '
+      read(20,'(a)',end=101) pfile
+  101 continue
       close (20)
+      if(pfile.eq.' ') pfile='mobcal_$gasid.params'
 c
+BODY
+        cat <<'BODY2'
       ip=0
       it=0
       iu1=0
@@ -113,6 +155,9 @@ c
       open (8,file='ljprobe.out')
       open (7,file='ljprobe.dat')
 c
+BODY2
+        echo "      call ljread(pfile,'$gasid')"
+        cat <<'BODY3'
       call fcoord(filen1,unit,dchar,xlabel,asymp)
       iic=1
       call ljdump(1)
@@ -139,7 +184,7 @@ c
       implicit double precision (a-h,m-z)
       include 'mobcal_limits.inc'
       common/constants/mu,ro,eo,pi,cang,ro2,dipol,emax,m1,m2,
-BODY
+BODY3
         echo "$constants"
         cat <<'EPILOGUE'
       common/ljparameters/eolj(len),rolj(len),eox4(len),
