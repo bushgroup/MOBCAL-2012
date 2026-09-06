@@ -357,7 +357,10 @@ for gas in $GASES; do
     # path to a correct copy in a subdirectory -- and must reach the mass-key
     # refusal with the banner printed. Relative paths throughout: a POSIX
     # $ROOT path is not one a native Windows binary can open.
-    other=$(case "$gas" in he) echo mobcal_N2.params ;; *) echo mobcal_He.params ;; esac)
+    # An if, not `$(case ...)': macOS's /bin/sh is bash 3.2, which cannot parse
+    # a case statement inside command substitution -- measured, as a syntax
+    # error on both macOS CI jobs and nowhere else.
+    if [ "$gas" = he ]; then other=mobcal_N2.params; else other=mobcal_He.params; fi
     cp "$ROOT/$other" "$d/"
     awk '!done && $1 == "1" && $2 == "H" { sub(/2\.2d0/, "2.2x0"); done = 1 } { print }' \
         "$ROOT/$params" > "$d/bad.params"
