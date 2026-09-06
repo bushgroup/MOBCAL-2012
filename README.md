@@ -240,7 +240,7 @@ sh test/regression.sh --gas he
 ```
 
 That builds, runs and compares against the references in `sample-output/`.
-`CLAUDE.md` explains the three tiers it reports and the two normalizations the
+`CLAUDE.md` explains the three tiers it reports and the one normalization the
 comparison applies.
 
 A second, much faster gate checks that an input too large for the compiled
@@ -292,7 +292,7 @@ covers the two terminations no input can reach. See *Exit status* below.
 | Linux, 2012 | `g77` — the compiler the published output in [1] was produced with |
 
 All of these agree bit-for-bit on the 400,000-trajectory choline calculation,
-after the two normalizations documented in `CLAUDE.md`. `g77` is listed as
+after the line-ending normalization documented in `CLAUDE.md`. `g77` is listed as
 provenance, not as a requirement: the `sample-output/` files still carry its
 numbers line for line, and the v1.1 regeneration reproduced every one of them.
 
@@ -320,20 +320,23 @@ overwriting the other.
 With `mobcal_He.in` copied to `mobcal.in`, `./mHe` reproduces every number in
 `sample-output/Choline_He.out`; with `mobcal_N2.in` copied over it, `./mN2`
 reproduces every number in `sample-output/Choline_N2.out` — down to the
-stochastic diagnostics and the standard deviation. Three lines nevertheless
-differ from a plain `diff`, and none of the three is physics:
+stochastic diagnostics and the standard deviation. Two lines nevertheless
+differ from a plain `diff`, and neither is physics:
 
 + **The echoed `input file name`.** The reference files were produced from a
   file named `Choline_pop.mfj`; this repository ships the same coordinates as
   `Choline.mfj`, so that field — and only that field — carries a different name,
   twice.
-+ **The exponent letter** on the `mass of ion` line, which g77 wrote `E` and
-  `gfortran` writes `D`.
 + **The line terminator**, on Windows only.
 
 `test/regression.sh` stages the input under the name the reference records and
-normalizes the other two before comparing, which is why *Checking your build*
-above recommends that script over `diff`. `CLAUDE.md` documents all three.
+strips end-of-line CR before comparing, which is why *Checking your build*
+above recommends that script over `diff`. `CLAUDE.md` documents both.
+
+There were three through v1.1. The third was the exponent letter on the `mass of
+ion` line, which `g77` wrote `E` and `gfortran` wrote `D`; v1.2 corrected the
+edit descriptor that caused it, so a fresh run now prints what the reference
+holds.
 
 ### Exit status
 

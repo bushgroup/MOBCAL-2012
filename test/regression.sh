@@ -58,26 +58,20 @@
 # text mode. No checkout setting can fix a difference introduced after checkout,
 # so the comparison strips end-of-line CR itself and does not rely on git.
 #
-# One further normalization is needed and is narrow. Format 604, the "mass of
-# ion" line, is the only edit descriptor in either source file that uses 1pd
-# rather than 1pe:
+# That is the only normalization. There was a second one until v1.2, rewriting a
+# Fortran D exponent to an E: format 604, the "mass of ion" line, was the one
+# edit descriptor in either source that asked for 1pd rather than 1pe, so g77
+# wrote 1.0417E+02 where gfortran wrote 1.0417D+02 -- same value, same digits, a
+# runtime formatting difference and not physics.
 #
-#     $ grep 'pd[0-9]' mobcal_He.f mobcal_N2.f
-#     mobcal_He.f:  604 format(1x,'mass of ion =',1pd11.4)
-#     mobcal_N2.f:  604 format(1x,'mass of ion =',1pd11.4)
-#
-# g77 printed that as 1.0417E+02; gfortran prints 1.0417D+02. Same value, same
-# digits, different exponent letter -- a Fortran runtime formatting difference,
-# not physics. Without this rule no gfortran build can match the published 2012
-# reference byte for byte, on any platform.
-#
-# The v1.1 regeneration did not take the chance to drop this rule, though it
-# could have: the regenerated references were passed through this same
-# normalization before being committed, so they keep the published E spelling and
-# the rule is still what makes a live gfortran run match them. Correcting the
-# descriptor to 1pe would remove the need for it, but that is one more line of
-# output moving in the release that regenerates the fixtures, and the value of
-# that release is that its diff is exactly the two changes it claims.
+# v1.2 corrected the descriptor instead of keeping the rule, and no reference had
+# to move to allow it: sample-output/ already read E, because the v1.1
+# regeneration committed output that had been through this same normalize(). The
+# evidence that the rule was live and was doing only this is the intermediate
+# state, and it is the check to repeat before touching normalize() again: with
+# the rule removed and the descriptor still 1pd, the helium gate fails T1 and T3
+# on the "mass of ion" line and on nothing else, T2 does not move, and correcting
+# the descriptor passes all three tiers against the untouched reference.
 
 set -eu
 
@@ -113,10 +107,10 @@ CR=$(printf '\r')
 # --- helpers ---------------------------------------------------------------
 
 normalize() {
-    # End-of-line CR only, then the D-exponent rule. A literal CR from printf
-    # rather than the escape '\r', because BSD sed on macOS reads '\r' in a
-    # pattern as a literal 'r' and would strip trailing letters instead.
-    sed -e "s/${CR}\$//" -e 's/\([0-9]\)D\([+-][0-9]\)/\1E\2/g' "$1"
+    # End-of-line CR only. A literal CR from printf rather than the escape
+    # '\r', because BSD sed on macOS reads '\r' in a pattern as a literal 'r'
+    # and would strip trailing letters instead.
+    sed -e "s/${CR}\$//" "$1"
 }
 
 deterministic() {

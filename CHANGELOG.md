@@ -63,6 +63,34 @@ repository's tags; `v2.0` is reserved for the first breaking change.
   `mobcal.in`, which this release replaced with one template per gas, so that
   one entry checked nothing. It now names `mobcal_He.in` and `mobcal_N2.in`.
 
++ **The `mass of ion` line now prints an `E` exponent, like every other value
+  in the file.** Format 604 was the one edit descriptor in either source that
+  asked for `1pd` rather than `1pe`, so `gfortran` wrote `1.0417D+02` where the
+  published `g77` output wrote `1.0417E+02` — the same value and the same
+  digits, a Fortran runtime formatting difference and not physics, but one more
+  line of a fresh run differing from the committed reference. Since v1.1
+  `test/regression.sh` had absorbed it by rewriting `D` to `E` on both sides of
+  every comparison. That rule is gone; stripping end-of-line CR is now the only
+  normalization the comparison applies, and a hand `diff` of a fresh run against
+  `sample-output/` shows two differences rather than three.
+
+  **`sample-output/` did not move.** The v1.1 regeneration committed output that
+  had already been through `normalize()`, so both references read `1.0417E+02`
+  before this change; correcting the descriptor made the program print what they
+  already held. `1pd11.4` and `1pe11.4` produce the same eleven characters but
+  for the letter, so the change is one line in each source file and nothing
+  else. `CLAUDE.md` said through v1.1 that this correction would cost a
+  regeneration of its own; it did not, and that note is corrected in the same
+  commit.
+
+  The evidence that the rule was live and was normalizing this line and no
+  other is the intermediate state, recorded here because it is the check to
+  repeat before anyone touches `normalize()` again: with the rule removed and
+  the descriptor still `1pd`, the helium gate fails T1 and T3 on the `mass of
+  ion` line alone and T2 does not move; with the descriptor corrected it passes
+  all three tiers against the untouched reference, on both gases and all three
+  platforms.
+
 ### Documentation
 
 + **The six chunk-4 elements' integer masses are now stated as a decision, not

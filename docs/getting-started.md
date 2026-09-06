@@ -69,11 +69,11 @@ the same directory overwrite each other's output — copy `mobcal_He.in` or
 `mobcal_N2.in` to `mobcal.in` first. With the copy and `Choline.mfj` shipped in
 this repository, `mHe` reproduces every number in
 `sample-output/Choline_He.out` and `mN2` (after copying `mobcal_N2.in`
-instead) every number in `sample-output/Choline_N2.out`. Three lines still
+instead) every number in `sample-output/Choline_N2.out`. Two lines still
 differ from a plain `diff`
 — the echoed input file name, which the 2012 references took from a file
-called `Choline_pop.mfj`, and two formatting spellings — so check with `sh
-test/regression.sh`, which accounts for all three. *Run the compiled code*
+called `Choline_pop.mfj`, and the line terminator on Windows — so check with
+`sh test/regression.sh`, which accounts for both. *Run the compiled code*
 and *Checking your build* in `README.md` have the detail and the one-line
 cross-section values.
 

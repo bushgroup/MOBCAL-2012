@@ -532,8 +532,8 @@ prints `1.0417D+02` for format 604. Committing that would have put a third kind
 of change into a diff whose whole value is being exactly the two changes it
 claims. So the new references are the fresh output passed through the gate's own
 normalization -- the same function both sides of every comparison go through --
-which keeps the published `E` spelling and leaves the D-to-E rule doing the work
-it was written for.
+which keeps the published `E` spelling and, until v1.2 retired that rule, left
+the D-to-E normalization doing the work it was written for.
 
 **The diff is the deliverable, and it was counted.** Helium: 84 changed lines,
 being 4 version lines (one added at the top, `program version` rewritten, one
@@ -553,6 +553,13 @@ of the six chunk-4 elements (chlorine 35.00 against 35.45, and five more), which
 are inconsistent with all ten legacy rows carrying real atomic weights to four
 significant figures. Neither touches choline, so neither needs this commit's
 regeneration and both can land on their own terms.
+
+**That paragraph was wrong about the first item, and this file repeated it for
+four chunks.** Correcting 604 moves no line at all. Committing `normalize()`d
+output here is exactly what left the references reading `E`, so the corrected
+program matches them unchanged; v1.2 did it in one line per source file and
+regenerated nothing. *The one normalization the comparison applies*, below, has
+the detail and the check that proves the rule was live.
 
 ## Chunk 8 -- where the parameters actually come from
 
@@ -608,8 +615,9 @@ things that look like defects, are, and must not be repaired.
 Two things chunk 8 deliberately did not do. It did not put `convr` on the helium
 halogen radii -- that would invent a parameterization nobody published and move
 published numbers. And it did not correct the four-significant-figure integer
-masses, format 604's `1pd`, or `conve`; each needs its own regeneration and none
-is settled by this reply.
+masses, format 604's `1pd`, or `conve`; none is settled by this reply. Two of
+the three still need their own regeneration. 604 turned out not to: v1.2
+corrected it and `sample-output/` did not move.
 
 One note for a future grep. `0.8602` still appears in six files, in every case
 withdrawing the claim rather than making it. The check is not that the string is
@@ -705,35 +713,38 @@ root and building the same source by absolute path from an unrelated working
 directory produce byte-identical binaries. `README.md`'s "one command per gas"
 still holds; what changed is that it now lists a required source file.
 
-## Two normalizations the comparison applies
+## The one normalization the comparison applies
 
-Both are narrow and both are needed to compare a gfortran build against the
-references published in 2012, which were produced with g77. Chunk 5 regenerated
-those files, but through this same normalization, so they still hold g77's
-spelling and both rules still apply.
+**End-of-line CR**, for the reason above, and needed to compare a gfortran build
+against the references published in 2012, which were produced with g77. Stripped
+only at end of line, never mid-line: the filename fields are blank-padded to 30
+columns by an `a30` edit descriptor, and those trailing blanks are real content.
 
-1. **End-of-line CR**, for the reason above. Stripped only at end of line, never
-   mid-line: the filename fields are blank-padded to 30 columns by an `a30` edit
-   descriptor, and those trailing blanks are real content.
+**There were two until v1.2.** The second rewrote a Fortran `D` exponent to an
+`E`. Format 604, the `mass of ion` line, was the only edit descriptor in either
+source that asked for `1pd` rather than `1pe`, and neither source has one now.
+g77 printed `1.0417E+02`; gfortran printed `1.0417D+02` — same value, same
+digits, different exponent letter, a runtime formatting difference and not
+physics. Until v1.2 no gfortran build could match the published references byte
+for byte on any platform without the rule.
 
-2. **Fortran `D` exponent → `E`.** Format 604, the `mass of ion` line, is the
-   only edit descriptor in either source that uses `1pd` rather than `1pe`:
+**Correcting the descriptor cost no regeneration**, which is not what this file
+said for four chunks. `sample-output/` already read `E`: chunk 5 committed output
+passed through `normalize()`, so the references hold g77's spelling, and the
+corrected program prints exactly that. `1pd11.4` and `1pe11.4` produce the same
+eleven characters but for the letter — verified on this compiler before the
+change, not assumed from the descriptor. So v1.2 changed one line per source
+file, deleted the rule, and moved nothing in `sample-output/`.
 
-   ```sh
-   grep -n 'pd[0-9]' mobcal_He.f mobcal_N2.f
-   ```
+**The evidence that the rule was live and was doing only this is the intermediate
+state**, and it is the check to repeat before touching `normalize()` again. With
+the rule removed and the descriptor still `1pd`, the helium gate fails T1 and T3
+on the `mass of ion` line and on nothing else, and T2 does not move; with the
+descriptor corrected it passes all three tiers against the untouched reference.
+The three-platform, two-gas CI matrix is what carries that from helium on Windows
+to the claim that the rule normalized that line and no other.
 
-   g77 printed `1.0417E+02`; gfortran prints `1.0417D+02`. Same value, same
-   digits, different exponent letter — a runtime formatting difference, not
-   physics. Without this rule no gfortran build can match the published
-   references byte for byte on any platform. Correcting the descriptor to `1pe`
-   would remove the need for the rule. Chunk 5 was the moment to do it — it
-   regenerates the fixtures anyway — and chose not to, so that the one
-   regeneration commit's diff would contain exactly the two changes it claims and
-   nothing that merely rode along. It is now a change that costs a regeneration
-   of its own.
-
-**A third difference is staged away rather than normalized.** Both references
+**The other difference is staged away rather than normalized.** Both references
 echo the name of the file they were run on, twice, and that name is
 `Choline_pop.mfj` — the 2012 run's. This repository ships the same coordinates
 as `Choline.mfj`. So `test/regression.sh` copies the input to the name it reads
@@ -741,11 +752,10 @@ out of the reference before running, rather than editing either side of the
 comparison. The consequence is worth stating in the contributor notes because it
 surprises anyone checking a build by hand: a user who copies one of the shipped
 `mobcal_He.in` / `mobcal_N2.in` templates to `mobcal.in`, runs it directly, and
-diffs the result gets one differing field, twice, on top of the two rules
-above — and it is the echoed filename, not a number.
+diffs the result gets one differing field, twice, on top of the line terminator
+on Windows — and it is the echoed filename, not a number.
 Chunk 7 measured exactly that from a clean clone, and `README.md`'s *Run the
-compiled code* now names all three differences instead of promising an exact
-match.
+compiled code* names both differences instead of promising an exact match.
 
 ## How the documentation cites the source
 
@@ -799,7 +809,8 @@ the number was redundant before it was wrong.
 
 The rule covers pasted `grep -n` output too. `test/regression.sh` carried a
 transcript of the `1pd` grep whose two line numbers had drifted by 46 and 73;
-it now shows the same grep without `-n`.
+it was reduced to the same grep without `-n`, and v1.2 then retired the
+descriptor and the transcript with it.
 
 **The rule was tested before it was committed, by accident.** `cd45c29` landed
 on `v1.2-dev` while this change was in review: it converted every refusal to
