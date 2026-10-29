@@ -56,6 +56,10 @@ element and the output formats are the same in both. The nitrogen program is the
 reference [3], as used for reference [1]. The parameters in both programs are the ones the
 calculations of [1] were made with.
 
+The ion–nitrogen interaction of `mobcal_N2.f` was carried into the nitrogen program of the
+2018 MMFF94/exp-6 release, with the exp-6 potential in place of the Lennard-Jones term; that
+release is kept as distributed at [bushgroup/MOBCAL-2018](https://github.com/bushgroup/MOBCAL-2018).
+
 The current program in bushgroup/MOBCAL reads its element table, its temperature and its
 sampling counts from files instead of the source. With the 2000 release's table as its element
 file and the temperature and `imp` set to 298 K and 25, it reproduces the 2000 reference output
